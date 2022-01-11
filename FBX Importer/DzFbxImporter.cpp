@@ -34,7 +34,8 @@
 #include "dzversion.h"
 
 #if FBXSDK_VERSION_MAJOR >= 2016
-#include "dzfbxdefines.h"
+#define DATA_FBX_USER_PROPERTIES "FbxUserProperties"
+#define DATA_LOD_INFO "LODInfo"
 #endif
 
 #if ((DZ_SDK_VERSION_MAJOR >= 5) || ((DZ_SDK_VERSION_MAJOR == 4) && (DZ_SDK_VERSION_MINOR >= 12)))

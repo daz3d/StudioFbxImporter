@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# FBX SDK directory
+FBXSDK
+
+# build directory
+/build
