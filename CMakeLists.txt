@@ -24,8 +24,8 @@ set_property( GLOBAL PROPERTY USE_FOLDERS ON )
 set( DAZ_STUDIO_EXE_DIR "" CACHE PATH "Path to DAZ Studio, needs to be installed to a writeable location." )
 
 set( DAZ_SDK_DIR "" CACHE PATH "Path to root of the DAZ Studio SDK." )
-if( DAZ_SDK_DIR STREQUAL "" )
-	message( FATAL_ERROR "Provide a valid path to the DAZ Studio SDK." )
+if( NOT EXISTS ${DAZ_SDK_DIR} )
+	message( SEND_ERROR "Provide a valid path to the DAZ Studio SDK (DAZ_SDK_DIR)." )
 	return()
 endif()
 
