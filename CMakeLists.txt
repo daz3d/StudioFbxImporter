@@ -1,19 +1,18 @@
-#**********************************************************************
-#	Copyright (C) 2002-2020 Daz 3D, Inc. All Rights Reserved.
+#######################################################################
+#	Copyright (C) 2002-2022 DAZ 3D, Inc. All Rights Reserved.
 #
-#	This file is part of the DAZ Studio SDK.
+#	Licensed under the Apache License, Version 2.0 (the "License");
+#	you may not use this file except in compliance with the License.
+#	You may obtain a copy of the License at
 #
-#	This file may be used only in accordance with the DAZ Studio SDK
-#	license provided with the DAZ Studio SDK.
+#		http://www.apache.org/licenses/LICENSE-2.0
 #
-#	The contents of this file may not be disclosed to third parties,
-#	copied or duplicated in any form, in whole or in part, without the
-#	prior written permission of Daz 3D, Inc, except as explicitly
-#	allowed in the DAZ Studio SDK license.
-#
-#	See http://www.daz3d.com to contact DAZ 3D or for more
-#	information about the DAZ Studio SDK.
-#**********************************************************************
+#	Unless required by applicable law or agreed to in writing, software
+#	distributed under the License is distributed on an "AS IS" BASIS,
+#	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#	See the License for the specific language governing permissions and
+#	limitations under the License.
+#######################################################################
 
 cmake_minimum_required( VERSION 3.4.0 )
 
