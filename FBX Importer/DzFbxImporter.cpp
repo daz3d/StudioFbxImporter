@@ -820,6 +820,86 @@ static void setNodeRotationOrder( DzNode* dsNode, FbxNode* fbxNode )
 	dsNode->setRotationOrder( dsRotationOrder );
 }
 
+static void setNodeRotation( DzNode* dsNode, FbxNode* fbxNode )
+{
+	const FbxDouble3 lclRotation = fbxNode->LclRotation.Get();
+
+	//dsNode->getXRotControl()->setDefaultValue( lclRotation[0] );
+	//dsNode->getYRotControl()->setDefaultValue( lclRotation[1] );
+	//dsNode->getZRotControl()->setDefaultValue( lclRotation[2] );
+	dsNode->getXRotControl()->setValue( lclRotation[0] );
+	dsNode->getYRotControl()->setValue( lclRotation[1] );
+	dsNode->getZRotControl()->setValue( lclRotation[2] );
+}
+
+static void setNodeRotationLimits( DzNode* dsNode, FbxNode* fbxNode )
+{
+	const FbxLimits rotationLimits = fbxNode->GetRotationLimits();
+	if ( !rotationLimits.GetActive() )
+	{
+		return;
+	}
+
+	const FbxDouble3 min = rotationLimits.GetMin();
+	const FbxDouble3 max = rotationLimits.GetMax();
+
+	if ( rotationLimits.GetMaxXActive()
+		&& rotationLimits.GetMinXActive() )
+	{
+		dsNode->getXRotControl()->setIsClamped( true );
+		dsNode->getXRotControl()->setMinMax( min[0], max[0] );
+	}
+
+	if ( rotationLimits.GetMaxYActive()
+		&& rotationLimits.GetMinYActive() )
+	{
+		dsNode->getYRotControl()->setIsClamped( true );
+		dsNode->getYRotControl()->setMinMax( min[1], max[1] );
+	}
+
+	if ( rotationLimits.GetMaxZActive()
+		&& rotationLimits.GetMinZActive() )
+	{
+		dsNode->getZRotControl()->setIsClamped( true );
+		dsNode->getZRotControl()->setMinMax( min[2], max[2] );
+	}
+}
+
+static void setNodeTranslation( DzNode* dsNode, FbxNode* fbxNode, DzVec3 translationOffset )
+{
+	const FbxDouble3 translation = fbxNode->LclTranslation.Get();
+
+	const float posX = translation[0] - translationOffset[0];
+	const float posY = translation[1] - translationOffset[1];
+	const float posZ = translation[2] - translationOffset[2];
+
+	//dsNode->getXPosControl()->setDefaultValue( posX );
+	//dsNode->getYPosControl()->setDefaultValue( posY );
+	//dsNode->getZPosControl()->setDefaultValue( posZ );
+	dsNode->getXPosControl()->setValue( posX );
+	dsNode->getYPosControl()->setValue( posY );
+	dsNode->getZPosControl()->setValue( posZ );
+}
+
+static void setNodeInheritsScale( DzNode* dsNode, FbxNode* fbxNode )
+{
+	FbxTransform::EInheritType inheritType;
+	fbxNode->GetTransformationInheritType( inheritType );
+	dsNode->setInheritScale( inheritType != FbxTransform::eInheritRrs );
+}
+
+static void setNodeScaling( DzNode* dsNode, FbxNode* fbxNode )
+{
+	const FbxDouble3 scaling = fbxNode->LclScaling.Get();
+
+	//dsNode->getXScaleControl()->setDefaultValue( scaling[0] );
+	//dsNode->getYScaleControl()->setDefaultValue( scaling[1] );
+	//dsNode->getZScaleControl()->setDefaultValue( scaling[2] );
+	dsNode->getXScaleControl()->setValue( scaling[0] );
+	dsNode->getYScaleControl()->setValue( scaling[1] );
+	dsNode->getZScaleControl()->setValue( scaling[2] );
+}
+
 static bool _allClose( double a, double b, double c )
 {
 	if ( qAbs( a - b ) > 0.0000000001f || qAbs( a - c ) > 0.0000000001f )
@@ -1007,16 +1087,7 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 			node->dsParent->addNodeChild( node->dsNode );
 		}
 
-		FbxTransform::EInheritType inheritType;
-		node->fbxNode->GetTransformationInheritType( inheritType );
-		if ( inheritType == FbxTransform::eInheritRrs )
-		{
-			node->dsNode->setInheritScale( false );
-		}
-		else
-		{
-			node->dsNode->setInheritScale( true );
-		}
+		setNodeInheritsScale( node->dsNode, node->fbxNode );
 
 		const FbxVector4 rotationOffset = calcFbxRotationOffset( node->fbxNode );
 		node->dsNode->setOrigin( toVec3( rotationOffset ), true );
@@ -1136,35 +1207,7 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 			node->dsNode->getZPosControl()->setHidden( true );
 		}
 
-		if ( node->fbxNode->GetRotationLimits().GetActive() )
-		{
-			FbxDouble3 min = node->fbxNode->GetRotationLimits().GetMin();
-			FbxDouble3 max = node->fbxNode->GetRotationLimits().GetMax();
-
-			if ( node->fbxNode->GetRotationLimits().GetMaxXActive() &&
-				node->fbxNode->GetRotationLimits().GetMinXActive() )
-			{
-				node->dsNode->getXRotControl()->setIsClamped( true );
-				node->dsNode->getXRotControl()->setMin( min[0] );
-				node->dsNode->getXRotControl()->setMax( max[0] );
-			}
-
-			if ( node->fbxNode->GetRotationLimits().GetMaxYActive() &&
-				node->fbxNode->GetRotationLimits().GetMinYActive() )
-			{
-				node->dsNode->getYRotControl()->setIsClamped( true );
-				node->dsNode->getYRotControl()->setMin( min[1] );
-				node->dsNode->getYRotControl()->setMax( max[1] );
-			}
-
-			if ( node->fbxNode->GetRotationLimits().GetMaxZActive() &&
-				node->fbxNode->GetRotationLimits().GetMinZActive() )
-			{
-				node->dsNode->getZRotControl()->setIsClamped( true );
-				node->dsNode->getZRotControl()->setMin( min[2] );
-				node->dsNode->getZRotControl()->setMax( max[2] );
-			}
-		}
+		setNodeRotationLimits( node->dsNode, node->fbxNode );
 	}
 }
 
@@ -1184,38 +1227,18 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 {
 	if ( node->dsNode )
 	{
-		DzVec3 translationOffset = node->bindTranslation;
-		if ( node->parent && !node->parent->collapseTranslation )
-		{
-			translationOffset -= node->parent->bindTranslation;
-		}
-
-		const float posX = node->fbxNode->LclTranslation.Get()[0] - translationOffset[0];
-		const float posY = node->fbxNode->LclTranslation.Get()[1] - translationOffset[1];
-		const float posZ = node->fbxNode->LclTranslation.Get()[2] - translationOffset[2];
-
 		if ( !node->collapseTranslation )
 		{
-			node->dsNode->getXPosControl()->setDefaultValue( posX );
-			node->dsNode->getYPosControl()->setDefaultValue( posY );
-			node->dsNode->getZPosControl()->setDefaultValue( posZ );
-			node->dsNode->getXPosControl()->setValue( posX );
-			node->dsNode->getYPosControl()->setValue( posY );
-			node->dsNode->getZPosControl()->setValue( posZ );
+			DzVec3 translationOffset = node->bindTranslation;
+			if ( node->parent )
+			{
+				translationOffset -= node->parent->bindTranslation;
+			}
 
-			node->dsNode->getXRotControl()->setDefaultValue( node->fbxNode->LclRotation.Get()[0] );
-			node->dsNode->getYRotControl()->setDefaultValue( node->fbxNode->LclRotation.Get()[1] );
-			node->dsNode->getZRotControl()->setDefaultValue( node->fbxNode->LclRotation.Get()[2] );
-			node->dsNode->getXRotControl()->setValue( node->fbxNode->LclRotation.Get()[0] );
-			node->dsNode->getYRotControl()->setValue( node->fbxNode->LclRotation.Get()[1] );
-			node->dsNode->getZRotControl()->setValue( node->fbxNode->LclRotation.Get()[2] );
+			setNodeTranslation( node->dsNode, node->fbxNode, translationOffset );
+			setNodeRotation( node->dsNode, node->fbxNode );
 
-			node->dsNode->getXScaleControl()->setDefaultValue( node->fbxNode->LclScaling.Get()[0] );
-			node->dsNode->getYScaleControl()->setDefaultValue( node->fbxNode->LclScaling.Get()[1] );
-			node->dsNode->getZScaleControl()->setDefaultValue( node->fbxNode->LclScaling.Get()[2] );
-			node->dsNode->getXScaleControl()->setValue( node->fbxNode->LclScaling.Get()[0] );
-			node->dsNode->getYScaleControl()->setValue( node->fbxNode->LclScaling.Get()[1] );
-			node->dsNode->getZScaleControl()->setValue( node->fbxNode->LclScaling.Get()[2] );
+			setNodeScaling( node->dsNode, node->fbxNode );
 		}
 
 		if ( m_fbxAnimLayer && !node->collapseTranslation )
