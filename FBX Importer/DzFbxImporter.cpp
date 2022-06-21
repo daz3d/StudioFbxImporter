@@ -1744,12 +1744,13 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 			}
 		}
 
+		DzFacet face;
+
 		// facet vertices
 		const int numIndices = fbxMesh->GetPolygonSize( i );
 		int triFanRoot = -1;
 		for ( int j = 0; j < numIndices; j++ )
 		{
-			DzFacet face;
 			// quads, tris, lines
 			if ( numIndices <= 4 )
 			{
