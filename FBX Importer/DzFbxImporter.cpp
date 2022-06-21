@@ -1166,7 +1166,8 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		const FbxProperty fbxPropertyNodeLabel = node->fbxNode->FindProperty( "StudioNodeLabel" );
 		if ( fbxPropertyNodeLabel.IsValid() )
 		{
-			node->dsNode->setLabel( QString( fbxPropertyNodeLabel.Get<FbxString>() ) );
+			const QString nodeLabel( fbxPropertyNodeLabel.Get<FbxString>());
+			node->dsNode->setLabel( dzScene->getUniqueTopLevelLabel( nodeLabel ) );
 		}
 #endif
 
