@@ -733,13 +733,6 @@ static FbxVector4 calcFbxRotationOffset( FbxNode* fbxNode )
 	return offset;
 }
 
-static void setNodeOrigin( DzNode* dsNode, FbxNode* fbxNode, DzVec3 offset )
-{
-	const DzVec3 origin = offset;
-
-	dsNode->setOrigin( origin, true );
-}
-
 static void setNodeOrientation( DzNode* dsNode, FbxNode* fbxNode )
 {
 	FbxVector4 fbxPre = fbxNode->GetPreRotation( FbxNode::eSourcePivot );
@@ -805,9 +798,8 @@ void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode )
 		m_rigErrorScale = true;
 	}
 
-	if ( fbxNode->GetNodeAttribute() && fbxNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eMesh )
+	if ( const FbxMesh* fbxMesh = fbxNode->GetMesh() )
 	{
-		const FbxMesh* fbxMesh = static_cast< FbxMesh* >( fbxNode->GetNodeAttribute() );
 		for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
 		{
 			FbxDeformer* deformer = fbxMesh->GetDeformer( i );
@@ -829,14 +821,12 @@ void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode )
 		}
 	}
 
-	if ( fbxNode->GetNodeAttribute() && fbxNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eSkeleton )
+	if ( const FbxSkeleton* fbxSkeleton = fbxNode->GetSkeleton() )
 	{
-		const FbxSkeleton* fbxSkeleton = static_cast< FbxSkeleton* >( fbxNode->GetNodeAttribute() );
 		if ( fbxSkeleton->GetSkeletonType() != FbxSkeleton::eRoot )
 		{
-			if ( !fbxNode->GetParent() ||
-				!fbxNode->GetParent()->GetNodeAttribute() ||
-				fbxNode->GetParent()->GetNodeAttribute()->GetAttributeType() != FbxNodeAttribute::eSkeleton )
+			const FbxSkeleton* fbxParentSkeleton = fbxNode->GetParent()->GetSkeleton();
+			if ( !fbxParentSkeleton )
 			{
 				m_rigErrorRoot = true;
 			}
@@ -853,7 +843,6 @@ void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode )
 **/
 void DzFbxImporter::fbxImportGraph( Node* node )
 {
-	FbxSkeleton* fbxSkeleton = NULL;
 	DzNode* dsMeshNode = NULL;
 
 	if ( node == m_root )
@@ -869,11 +858,12 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		{
 			fbxImportGraph( node->children[i] );
 		}
+
 		return;
 	}
 
-	if ( !node->fbxNode->GetNodeAttribute() ||
-		node->fbxNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eNull )
+	const FbxNull* fbxNull = node->fbxNode->GetNull();
+	if ( fbxNull || !node->fbxNode->GetNodeAttribute() )
 	{
 		node->dsNode = new DzNode();
 	}
@@ -884,28 +874,29 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		case FbxNodeAttribute::eMarker:
 			break;
 		case FbxNodeAttribute::eSkeleton:
-			fbxSkeleton = static_cast< FbxSkeleton* >( node->fbxNode->GetNodeAttribute() );
-
-			switch ( fbxSkeleton->GetSkeletonType() )
 			{
-			case FbxSkeleton::eRoot:
-				node->dsNode = createFigure();
-				break;
-			case FbxSkeleton::eLimb:
-				node->dsNode = new DzBone();
-				node->dsNode->setInheritScale( true );
-				break;
-			case FbxSkeleton::eLimbNode:
-				node->dsNode = new DzBone();
-				node->dsNode->setInheritScale( true );
-				break;
-			case FbxSkeleton::eEffector:
-				break;
+				const FbxSkeleton* fbxSkeleton = node->fbxNode->GetSkeleton();
+				switch ( fbxSkeleton->GetSkeletonType() )
+				{
+				case FbxSkeleton::eRoot:
+					node->dsNode = createFigure();
+					break;
+				case FbxSkeleton::eLimb:
+					node->dsNode = new DzBone();
+					node->dsNode->setInheritScale( true );
+					break;
+				case FbxSkeleton::eLimbNode:
+					node->dsNode = new DzBone();
+					node->dsNode->setInheritScale( true );
+					break;
+				case FbxSkeleton::eEffector:
+					break;
+				}
 			}
 			break;
 		case FbxNodeAttribute::eMesh:
 			{
-				const FbxMesh* fbxMesh = static_cast< FbxMesh* >( node->fbxNode->GetNodeAttribute() );
+				const FbxMesh* fbxMesh = node->fbxNode->GetMesh();
 				bool hasSkin = false;
 				for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
 				{
@@ -917,10 +908,11 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 					}
 				}
 
+				const QString fbxNodeName( node->fbxNode->GetName() );
 				if ( node->dsParent &&
 					!node->dsParent->getObject() &&
-					( ( node->dsParent->getName() + ".Shape" ) == node->fbxNode->GetName() ||
-						( node->dsParent->getName() + "_Shape" ) == node->fbxNode->GetName() ) )
+					( node->dsParent->getName() + ".Shape" == fbxNodeName ||
+						node->dsParent->getName() + "_Shape" == fbxNodeName ) )
 				{
 					dsMeshNode = node->dsParent;
 				}
@@ -980,7 +972,7 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		}
 
 		const FbxVector4 rotationOffset = calcFbxRotationOffset( node->fbxNode );
-		setNodeOrigin( node->dsNode, node->fbxNode, toVec3( rotationOffset ) );
+		node->dsNode->setOrigin( toVec3( rotationOffset ), true );
 		setNodeOrientation( node->dsNode, node->fbxNode );
 		setNodeRotationOrder( node->dsNode, node->fbxNode );
 
@@ -1058,7 +1050,6 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		{
 			fbxImportGraph( node->children[i] );
 		}
-
 
 		DzVec3 endPoint = node->dsNode->getOrigin();
 		if ( node->dsNode->getNumNodeChildren() )
@@ -1262,10 +1253,11 @@ DzTexture* DzFbxImporter::toTexture( FbxProperty fbxProperty )
 	for ( int i = 0; i < fbxProperty.GetSrcObjectCount<FbxFileTexture>(); ++i )
 	{
 		const FbxFileTexture* lTex = fbxProperty.GetSrcObject<FbxFileTexture>( i );
-		DzTexture* dsTexture = dzApp->getImageMgr()->getImage( lTex->GetFileName() );
+		const DzImageMgr* imgMgr = dzApp->getImageMgr();
+		DzTexture* dsTexture = imgMgr->getImage( lTex->GetFileName() );
 		if ( !dsTexture )
 		{
-			dsTexture = dzApp->getImageMgr()->getImage( m_folder.filePath( lTex->GetFileName() ) );
+			dsTexture = imgMgr->getImage( m_folder.filePath( lTex->GetFileName() ) );
 		}
 
 		return dsTexture;
@@ -1278,7 +1270,7 @@ DzTexture* DzFbxImporter::toTexture( FbxProperty fbxProperty )
 **/
 void DzFbxImporter::handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParent )
 {
-	FbxMesh* fbxMesh = static_cast< FbxMesh* >( fbxNode->GetNodeAttribute() );
+	FbxMesh* fbxMesh = fbxNode->GetMesh();
 	DzObject* dsObject = new DzObject();
 	DzFacetMesh* dsMesh = new DzFacetMesh();
 	DzFacetShape* dsShape = new DzFacetShape();
@@ -1402,7 +1394,6 @@ void DzFbxImporter::handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParen
 		DzDefaultMaterial* dsDefMaterial = qobject_cast<DzDefaultMaterial*>( dsMaterial );
 
 		const bool isPhong = fbxMaterial->GetClassId().Is( FbxSurfacePhong::ClassId );
-
 		if ( isPhong )
 		{
 			FbxSurfacePhong* fbxPhong = static_cast<FbxSurfacePhong*>( fbxMaterial );
