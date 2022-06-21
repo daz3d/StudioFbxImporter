@@ -1230,11 +1230,11 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 				node->dsNode->addDataItem( new DzSimpleElementData( DATA_FBX_USER_PROPERTIES, true ) );
 			}
 
-			auto key = prop.GetName();
-			auto data = qobject_cast<DzSimpleElementData*>( node->dsNode->findDataItem( DATA_FBX_USER_PROPERTIES ) );
-			auto settings = data->getSettings();
+			FbxString key = prop.GetName();
+			DzSimpleElementData* data = qobject_cast<DzSimpleElementData*>( node->dsNode->findDataItem( DATA_FBX_USER_PROPERTIES ) );
+			DzSettings* settings = data->getSettings();
 
-			auto type = prop.GetPropertyDataType();
+			FbxDataType type = prop.GetPropertyDataType();
 			switch ( type.GetType() )
 			{
 			case eFbxInt:
@@ -1251,6 +1251,8 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 				break;
 			case eFbxString:
 				settings->setStringValue( QString( key ), QString( prop.Get<FbxString>() ) );
+				break;
+			default:
 				break;
 			}
 		}
