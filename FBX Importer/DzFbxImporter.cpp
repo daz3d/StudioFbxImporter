@@ -1980,8 +1980,9 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	// mesh modifiers ---
 	for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
 	{
-		// skin binding
 		FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( i );
+
+		// skin binding
 		if ( dsFigure && fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
 		{
 			Skinning skinning;
@@ -1989,6 +1990,29 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 			skinning.fbxSkin = static_cast< FbxSkin* >( fbxDeformer );
 			skinning.dsFigure = dsFigure;
 			skinning.numVertices = numVertices;
+
+			if ( skinning.fbxSkin
+				&& skinning.fbxSkin->GetSkinningType() == FbxSkin::eBlend )
+			{
+				int numBlendIndices = skinning.fbxSkin->GetControlPointIndicesCount();
+				int* blendIndices = skinning.fbxSkin->GetControlPointIndices();
+				if ( numBlendIndices > 0 && blendIndices )
+				{
+					skinning.m_blendWeights = new DzWeightMap( numVertices, "Blend Weights" );
+					unsigned short* dsWeightValues = skinning.m_blendWeights->getWeights();
+					for ( int bwIdx = 0; bwIdx < numBlendIndices; ++bwIdx )
+					{
+						const int idx = blendIndices[bwIdx];
+						if ( idx > numVertices )
+						{
+							continue;
+						}
+
+						const double blendWeight = skinning.fbxSkin->GetControlPointBlendWeights()[bwIdx];
+						dsWeightValues[idx] = DZ_USHORT_MAX * blendWeight;
+					}
+				}
+			}
 
 			m_skins.push_back( skinning );
 		}
