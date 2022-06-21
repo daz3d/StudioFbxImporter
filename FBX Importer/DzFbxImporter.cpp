@@ -1710,6 +1710,11 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	const int numPolygons = fbxMesh->GetPolygonCount();
 
 	const FbxGeometryElementPolygonGroup* fbxPolygonGroup = fbxMesh->GetElementPolygonGroup( 0 );
+	// check whether we have compatible polygon group info;
+	// count is 0 since FBX SDK 2020.0;
+	// count is as expected with FBX SDK 2019.5 and prior
+	const bool compatPolyGroup = fbxPolygonGroup && numPolygons == fbxPolygonGroup->GetIndexArray().GetCount();
+
 	int curGroupIdx = -1;
 	for ( int i = 0; i < numPolygons; i++ )
 	{
@@ -1729,13 +1734,13 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		}
 
 		// active face group
-		if ( fbxPolygonGroup )
+		if ( compatPolyGroup )
 		{
 			const int groupIdx = fbxPolygonGroup->GetIndexArray().GetAt( i );
 			if ( groupIdx != curGroupIdx )
 			{
 				curGroupIdx = groupIdx;
-				dsMesh->activateFaceGroup( "fbx_group_" % QString::number( groupIdx ) );
+				dsMesh->activateFaceGroup( "fbx_polygonGroup_" % QString::number( groupIdx ) );
 			}
 		}
 
