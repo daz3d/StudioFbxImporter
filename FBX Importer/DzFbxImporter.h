@@ -143,8 +143,8 @@ private:
 
 	void		fbxPreRecurse( FbxNode* fbxNode );
 
-	void		handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParent );
-	void		handleFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale = 1 );
+	void		fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode );
+	void		applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale = 1 );
 	DzTexture*	toTexture( FbxProperty fbxProperty );
 
 	void		fbxImportGraph( Node* node );

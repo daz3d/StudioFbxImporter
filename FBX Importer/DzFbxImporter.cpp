@@ -931,7 +931,7 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 					dsMeshNode = node->dsNode;
 				}
 
-				handleFbxMesh( node, node->fbxNode, dsMeshNode );
+				fbxImportMesh( node, node->fbxNode, dsMeshNode );
 			}
 			break;
 		case FbxNodeAttribute::eNurbs:
@@ -1173,17 +1173,17 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 
 		if ( m_fbxAnimLayer && !node->collapseTranslation )
 		{
-			handleFbxCurve( node->fbxNode->LclTranslation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X ), node->dsNode->getXPosControl() );
-			handleFbxCurve( node->fbxNode->LclTranslation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y ), node->dsNode->getYPosControl() );
-			handleFbxCurve( node->fbxNode->LclTranslation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z ), node->dsNode->getZPosControl() );
+			applyFbxCurve( node->fbxNode->LclTranslation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X ), node->dsNode->getXPosControl() );
+			applyFbxCurve( node->fbxNode->LclTranslation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y ), node->dsNode->getYPosControl() );
+			applyFbxCurve( node->fbxNode->LclTranslation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z ), node->dsNode->getZPosControl() );
 
-			handleFbxCurve( node->fbxNode->LclRotation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X ), node->dsNode->getXRotControl() );
-			handleFbxCurve( node->fbxNode->LclRotation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y ), node->dsNode->getYRotControl() );
-			handleFbxCurve( node->fbxNode->LclRotation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z ), node->dsNode->getZRotControl() );
+			applyFbxCurve( node->fbxNode->LclRotation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X ), node->dsNode->getXRotControl() );
+			applyFbxCurve( node->fbxNode->LclRotation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y ), node->dsNode->getYRotControl() );
+			applyFbxCurve( node->fbxNode->LclRotation.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z ), node->dsNode->getZRotControl() );
 
-			handleFbxCurve( node->fbxNode->LclScaling.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X ), node->dsNode->getXScaleControl() );
-			handleFbxCurve( node->fbxNode->LclScaling.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y ), node->dsNode->getYScaleControl() );
-			handleFbxCurve( node->fbxNode->LclScaling.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z ), node->dsNode->getZScaleControl() );
+			applyFbxCurve( node->fbxNode->LclScaling.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_X ), node->dsNode->getXScaleControl() );
+			applyFbxCurve( node->fbxNode->LclScaling.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Y ), node->dsNode->getYScaleControl() );
+			applyFbxCurve( node->fbxNode->LclScaling.GetCurve( m_fbxAnimLayer, FBXSDK_CURVENODE_COMPONENT_Z ), node->dsNode->getZScaleControl() );
 		}
 
 
@@ -1268,13 +1268,13 @@ DzTexture* DzFbxImporter::toTexture( FbxProperty fbxProperty )
 
 /**
 **/
-void DzFbxImporter::handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParent )
+void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode )
 {
 	FbxMesh* fbxMesh = fbxNode->GetMesh();
 	DzObject* dsObject = new DzObject();
 	DzFacetMesh* dsMesh = new DzFacetMesh();
 	DzFacetShape* dsShape = new DzFacetShape();
-	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsParent );
+	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsMeshNode );
 
 	DzVec3 offset( 0, 0, 0 );
 	if ( dsFigure )
@@ -1813,7 +1813,7 @@ void DzFbxImporter::handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParen
 	}
 
 	dsObject->addShape( dsShape );
-	dsParent->setObject( dsObject );
+	dsMeshNode->setObject( dsObject );
 
 
 	for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
@@ -1855,7 +1855,7 @@ void DzFbxImporter::handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParen
 				morphControl = dsMorph->getValueChannel();
 #endif
 
-				handleFbxCurve( fbxBlendChannel->DeformPercent.GetCurve( m_fbxAnimLayer ), morphControl, 0.01 );
+				applyFbxCurve( fbxBlendChannel->DeformPercent.GetCurve( m_fbxAnimLayer ), morphControl, 0.01 );
 
 				for ( int v = 0; v < numVertices; v++ )
 				{
@@ -1913,7 +1913,7 @@ void DzFbxImporter::handleFbxMesh( Node* node, FbxNode* fbxNode, DzNode* dsParen
 	}
 }
 
-void DzFbxImporter::handleFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale )
+void DzFbxImporter::applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale )
 {
 	if ( !fbxCurve || !dsProperty )
 	{
