@@ -1087,6 +1087,14 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 			node->dsParent->addNodeChild( node->dsNode );
 		}
 
+#if FBXSDK_VERSION_MAJOR >= 2016
+		const FbxProperty fbxPropertyNodeLabel = node->fbxNode->FindProperty( "StudioNodeLabel" );
+		if ( fbxPropertyNodeLabel.IsValid() )
+		{
+			node->dsNode->setLabel( QString( fbxPropertyNodeLabel.Get<FbxString>() ) );
+		}
+#endif
+
 		setNodeInheritsScale( node->dsNode, node->fbxNode );
 
 		const FbxVector4 rotationOffset = calcFbxRotationOffset( node->fbxNode );
