@@ -294,12 +294,6 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 	bool optionsShown = false;
 #if DZ_SDK_4_12_OR_GREATER
 	optionsShown = getOptionsShown();
-#else
-	// DzFileIO::getOptionsShown() is not in the 4.5 SDK, so we attempt
-	// to use the meta-object to call the method.
-
-	QMetaObject::invokeMethod( this,
-		"getOptionsShown", Q_RETURN_ARG( bool, optionsShown ) );
 #endif
 
 	if ( optionsShown || impOptions->getIntValue( c_optionRunSilent, 0 ) )
@@ -398,11 +392,6 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 
 #if DZ_SDK_4_12_OR_GREATER
 	setOptionsShown( true );
-#else
-	// DzFileIO::setOptionsShown() is not in the 4.5 SDK, so we attempt
-	// to use the meta-object to call the method.
-
-	QMetaObject::invokeMethod( this, "setOptionsShown", Q_ARG( bool, true ) );
 #endif
 
 	frame->getOptions( options );
@@ -424,11 +413,6 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 {
 #if DZ_SDK_4_12_OR_GREATER
 	clearImportedNodes();
-#else
-	// DzImporter::clearImportedNodes() is not in the 4.5 SDK, so we attempt
-	// to use the meta-object to call the method.
-
-	QMetaObject::invokeMethod( this, "clearImportedNodes" );
 #endif
 
 	DzProgress progress( "Importing" );
@@ -439,14 +423,9 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 	QString orgName;
 #if DZ_SDK_4_12_OR_GREATER
 	orgName = dzApp->getOrgName();
-#else
-	// DzApp::getOrgName() is not in the 4.5 SDK, so we attempt to use the
-	// meta-object to call the method.
-
-	QMetaObject::invokeMethod( dzApp,
-		"getOrgName", Q_RETURN_ARG( QString, orgName ) );
 #endif
-	if ( !orgName.isEmpty() && orgName != QString( "DAZ 3D" ) )
+	if ( !orgName.isEmpty()
+		&& orgName != QString( "DAZ 3D" ) )
 	{
 		m_suppressRigErrors = true;
 	}
@@ -473,7 +452,31 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 		fbxIoSettings->SetBoolProp( IMP_FBX_GLOBAL_SETTINGS, true );
 	}
 
+#if FBXSDK_VERSION_MAJOR >= 2020
+	fbxImporter->GetStatus().KeepErrorStringHistory( true );
+#endif
+
 	fbxImporter->Import( m_fbxScene );
+
+	if ( fbxImporter->GetStatus() != FbxStatus::eSuccess )
+	{
+#if FBXSDK_VERSION_MAJOR >= 2020
+		FbxArray<FbxString*> history;
+		fbxImporter->GetStatus().GetErrorStringHistory( history );
+		if ( history.GetCount() > 1 )
+		{
+			// error strings are in stack order (last error -> first element)
+			for ( int i = history.GetCount() - 1; i >= 0 ; --i )
+			{
+				dzApp->warning( QString( "FBX Importer: %1" ).arg( history[i]->Buffer() ) );
+			}
+		}
+		FbxArrayDelete<FbxString*>( history );
+#else
+		dzApp->warning( QString( "FBX Importer: %1" ).arg( fbxImporter->GetStatus().GetErrorString() ) );
+#endif
+	}
+
 	fbxImporter->Destroy();
 
 	QScopedPointer<DzFileIOSettings> options( new DzFileIOSettings() );
@@ -950,13 +953,6 @@ static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
 	{
 #if DZ_SDK_4_12_OR_GREATER
 		presentation->setAutoFitBase( autoFitBase );
-#else
-		// DzPresentation::setAutoFitBase() is not in the 4.5 SDK, so we attempt
-		// to use the meta-object to call the method.
-
-		bool set = QMetaObject::invokeMethod( presentation, "setAutoFitBase",
-			Q_ARG( QString, autoFitBase ) );
-		Q_UNUSED( set )
 #endif //DZ_SDK_4_12_OR_GREATER
 	}
 
@@ -964,13 +960,6 @@ static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
 	{
 #if DZ_SDK_4_12_OR_GREATER
 		presentation->setPreferredBase( preferredBase );
-#else
-		// DzPresentation::setPreferredBase() is not in the 4.5 SDK, so we attempt
-		// to use the meta-object to call the method.
-
-		bool set = QMetaObject::invokeMethod( presentation, "setPreferredBase",
-			Q_ARG( QString, preferredBase ) );
-		Q_UNUSED( set )
 #endif //DZ_SDK_4_12_OR_GREATER
 	}
 }
@@ -1234,12 +1223,6 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 
 #if DZ_SDK_4_12_OR_GREATER
 		addImportedNode( node->dsNode );
-#else
-		// DzImporter::addImportedNode() is not in the 4.5 SDK, so we attempt to
-		// use the meta-object to call the method.
-
-		QMetaObject::invokeMethod( this,
-			"addImportedNode", Q_ARG( DzNode*, node->dsNode ) );
 #endif
 
 		for ( int i = 0; i < node->fbxNode->GetChildCount(); i++ )
@@ -1494,8 +1477,9 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 				// DzFacetMesh::setVertexWeight() is not in the 4.5 SDK, so we
 				// attempt to use the meta-object to call the method.
 
-				QMetaObject::invokeMethod( dsMesh,
-					"setVertexWeight", Q_ARG( int, j ), Q_ARG( int, v ) );
+				bool im = QMetaObject::invokeMethod( dsMesh, "setVertexWeight",
+					Q_ARG( int, j ), Q_ARG( int, v ) );
+				Q_UNUSED( im )
 #endif
 			}
 		}
@@ -1892,8 +1876,9 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 				// DzFacetMesh::addFacet() is not in the 4.5 SDK, so we attempt
 				// to use the meta-object to call the method.
 
-				QMetaObject::invokeMethod( dsMesh,
-					"addFacet", Q_ARG( const DzFacet &, face ) );
+				bool im = QMetaObject::invokeMethod( dsMesh, "addFacet",
+					Q_ARG( const DzFacet &, face ) );
+				Q_UNUSED( im )
 #endif
 
 				if ( isRoot )
@@ -1904,7 +1889,8 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 					// DzFacetMesh::incrementNgons() is not in the 4.5 SDK, so
 					// we attempt to use the meta-object to call the method.
 
-					QMetaObject::invokeMethod( dsMesh, "incrementNgons" );
+					bool im = QMetaObject::invokeMethod( dsMesh, "incrementNgons" );
+					Q_UNUSED( im )
 #endif
 				}
 			}
@@ -1949,8 +1935,9 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 				// DzFacetMesh::setEdgeWeight() is not in the 4.5 SDK, so we
 				// attempt to use the meta-object to call the method.
 
-				QMetaObject::invokeMethod( dsMesh,
-					"setEdgeWeight", Q_ARG( int, v0 ), Q_ARG( int, v1 ), Q_ARG( int, v ) );
+				bool im = QMetaObject::invokeMethod( dsMesh, "setEdgeWeight",
+					Q_ARG( int, v0 ), Q_ARG( int, v1 ), Q_ARG( int, v ) );
+				Q_UNUSED( im )
 #endif
 			}
 		}
