@@ -110,6 +110,16 @@ public:
 	@nosubgrouping
 	@brief		Class for importing files in the Autodesk FBX (*.fbx) format.
 
+	A specialization of DzImporter that implements an importer for the Autodesk
+	FBX (.fbx) format. Through its use of the FBX SDK to accomplish this task,
+	this importer also provides import capabilities for the Autodesk AutoCAD DXF
+	(.dxf) format, the Autodesk 3ds Max (.3ds) format, and the Collada DAE (.dae)
+	format, as supported by the FBX SDK.
+
+	@attention	The FBX SDK also provides import capabilities for the Alias
+				Wavefront OBJ (.obj) format, but it has been intentionally
+				excluded. Use DzObjImporter instead.
+
 	@sa DzImportMgr::findImporterByClassName()
 	@sa DzImportMgr::findImporter()
 
@@ -147,21 +157,57 @@ DzFbxImporter::~DzFbxImporter()
 **/
 bool DzFbxImporter::recognize( const QString &filename ) const
 {
-	return filename.endsWith( ".fbx", Qt::CaseInsensitive );
+	const QString ext = getFileExtension( filename ); //return value is lowercase
+	for ( int i = 0, n = getNumExtensions(); i < n; i++ )
+	{
+		if ( ext == getExtension( i ) )
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**
 **/
 int DzFbxImporter::getNumExtensions() const
 {
-	return 1;
+	return 4;
 }
 
 /**
 **/
 QString	DzFbxImporter::getExtension( int i ) const
 {
-	return "fbx";
+	if ( i == 0 )
+	{
+		return "fbx";
+	}
+
+	if ( i == 1 )
+	{
+		return "dxf";
+	}
+
+	if ( i == 2 )
+	{
+		return "3ds";
+	}
+
+	if ( i == 3 )
+	{
+		return "dae";
+	}
+
+	/*
+	if ( i == 4 )
+	{
+		return "obj";
+	}
+	*/
+
+	return QString();
 }
 
 /**
