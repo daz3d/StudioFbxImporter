@@ -48,7 +48,7 @@ if( WIN32 )
 	else()
 		message( FATAL_ERROR "Unknown architecture" )
 	endif()
-elseif(APPLE)
+elseif( APPLE )
 	set( DZ_LIB_SUFFIX ".dylib" )
 	set( DZ_BIN_SUFFIX ".dylib" )
 	set( DZ_LIB_PREFIX "lib" )
@@ -82,7 +82,7 @@ else()
 endif( WIN32 )
 set_property( TARGET dzcore APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${DAZ_SDK_INCLUDE_DIR}" )
 
-# Setup Qt from the DAZ SDK
+# Setup Qt from the DAZ Studio SDK
 if( WIN32 )
 	set( DAZ_SDK_QTCORE_LIBRARY "${DAZ_SDK_DIR}/lib/${DZ_MIXED_PLATFORM}/QtCore4.lib" )
 elseif( APPLE )
@@ -95,7 +95,7 @@ set( QT_BINARY_DIR "${DAZ_SDK_DIR}/bin/${DZ_MIXED_PLATFORM}" )
 set( QT_HEADERS_DIR "${DAZ_SDK_DIR}/include" )
 set( QT_QTCORE_INCLUDE_DIR "${DAZ_SDK_DIR}/include/QtCore" )
 
-# the qt find module needs this folder but our build does not so just fake it
+# The Qt find module needs this folder, but our build does not, so just fake it
 file( MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/DUMMY_MKSPECS/default" )
 set( QT_MKSPECS_DIR "${CMAKE_CURRENT_BINARY_DIR}/DUMMY_MKSPECS" )
 
@@ -120,9 +120,8 @@ function( setup_standard_plugin_source_groups )
 	source_group( "Source Files\\ui files" REGULAR_EXPRESSION ".*\\.ui$" )
 endfunction()
 
-# if DAZ_STUDIO_EXE_DIR is not defined the compiled result will be placed in
-# the default CMake binary folder
-# if DAZ_STUDIO_EXE_DIR is defined the compiled result placed in the Daz Studio ./plugins directory
+# If DAZ_STUDIO_EXE_DIR is not defined, the compiled result will be placed in the default CMake binary folder
+# If DAZ_STUDIO_EXE_DIR is defined, the compiled result placed in the Daz Studio ./plugins directory
 if( DAZ_STUDIO_EXE_DIR )
 	foreach( curConfig ${CMAKE_CONFIGURATION_TYPES} )
 		string( TOUPPER ${curConfig} curConfig )
