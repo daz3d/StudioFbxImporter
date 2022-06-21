@@ -1343,9 +1343,9 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 
 
 #if FBXSDK_VERSION_MAJOR >= 2016
-		for ( FbxProperty prop = node->fbxNode->GetFirstProperty(); prop.IsValid(); prop = node->fbxNode->GetNextProperty( prop ) )
+		for ( FbxProperty fbxProperty = node->fbxNode->GetFirstProperty(); fbxProperty.IsValid(); fbxProperty = node->fbxNode->GetNextProperty( fbxProperty ) )
 		{
-			if ( !prop.GetFlag( FbxPropertyFlags::eUserDefined ) )
+			if ( !fbxProperty.GetFlag( FbxPropertyFlags::eUserDefined ) )
 			{
 				continue;
 			}
@@ -1355,34 +1355,33 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 				node->dsNode->addDataItem( new DzSimpleElementData( DATA_FBX_USER_PROPERTIES, true ) );
 			}
 
-			FbxString key = prop.GetName();
-			DzSimpleElementData* data = qobject_cast<DzSimpleElementData*>( node->dsNode->findDataItem( DATA_FBX_USER_PROPERTIES ) );
-			DzSettings* settings = data->getSettings();
+			const QString key( fbxProperty.GetName() );
+			DzSimpleElementData* userPropertyData = qobject_cast<DzSimpleElementData*>( node->dsNode->findDataItem( DATA_FBX_USER_PROPERTIES ) );
+			DzSettings* userSettings = userPropertyData->getSettings();
 
-			FbxDataType type = prop.GetPropertyDataType();
-			switch ( type.GetType() )
+			FbxDataType fbxPropertyData = fbxProperty.GetPropertyDataType();
+			switch ( fbxPropertyData.GetType() )
 			{
 			case eFbxInt:
-				settings->setIntValue( QString( key ), prop.Get<int>() );
+				userSettings->setIntValue( key, fbxProperty.Get<int>() );
 				break;
 			case eFbxBool:
-				settings->setBoolValue( QString( key ), prop.Get<bool>() );
+				userSettings->setBoolValue( key, fbxProperty.Get<bool>() );
 				break;
 			case eFbxFloat:
-				settings->setFloatValue( QString( key ), prop.Get<float>() );
+				userSettings->setFloatValue( key, fbxProperty.Get<float>() );
 				break;
 			case eFbxDouble:
-				settings->setFloatValue( QString( key ), prop.Get<double>() );
+				userSettings->setFloatValue( key, fbxProperty.Get<double>() );
 				break;
 			case eFbxString:
-				settings->setStringValue( QString( key ), QString( prop.Get<FbxString>() ) );
+				userSettings->setStringValue( key, QString( fbxProperty.Get<FbxString>() ) );
 				break;
 			default:
 				break;
 			}
 		}
 #endif
-
 	}
 
 	for ( int i = 0; i < node->children.count(); i++ )
@@ -1392,15 +1391,15 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 }
 
 
-static QColor toQColor( FbxPropertyT<FbxDouble3> v )
+static QColor toQColor( FbxPropertyT<FbxDouble3> fbxValue )
 {
-	QColor c;
+	QColor clr;
 
-	c.setRedF( v.Get()[0] );
-	c.setGreenF( v.Get()[1] );
-	c.setBlueF( v.Get()[2] );
+	clr.setRedF( fbxValue.Get()[0] );
+	clr.setGreenF( fbxValue.Get()[1] );
+	clr.setBlueF( fbxValue.Get()[2] );
 
-	return c;
+	return clr;
 }
 
 /**
@@ -1409,12 +1408,12 @@ DzTexture* DzFbxImporter::toTexture( FbxProperty fbxProperty )
 {
 	for ( int i = 0; i < fbxProperty.GetSrcObjectCount<FbxFileTexture>(); ++i )
 	{
-		const FbxFileTexture* lTex = fbxProperty.GetSrcObject<FbxFileTexture>( i );
+		const FbxFileTexture* fbxFileTexture = fbxProperty.GetSrcObject<FbxFileTexture>( i );
 		const DzImageMgr* imgMgr = dzApp->getImageMgr();
-		DzTexture* dsTexture = imgMgr->getImage( lTex->GetFileName() );
+		DzTexture* dsTexture = imgMgr->getImage( fbxFileTexture->GetFileName() );
 		if ( !dsTexture )
 		{
-			dsTexture = imgMgr->getImage( m_folder.filePath( lTex->GetFileName() ) );
+			dsTexture = imgMgr->getImage( m_folder.filePath( fbxFileTexture->GetFileName() ) );
 		}
 
 		return dsTexture;
@@ -1442,7 +1441,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	// begin the edit
 	dsMesh->beginEdit();
 
-	// copy vertices
+	// vertices ---
 	int numVertices = fbxMesh->GetControlPointsCount();
 	FbxVector4* fbxVertices = fbxMesh->GetControlPoints();
 	DzPnt3* dsVertices = dsMesh->setVertexArray( numVertices );
@@ -1453,19 +1452,19 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		dsVertices[i][2] = fbxVertices[i][2] + offset[2];
 	}
 
-	// copy UVs
+	// UVs ---
 	for ( int i = 0; i < fbxMesh->GetElementUVCount(); i++ )
 	{
-		FbxGeometryElementUV* uvElement = fbxMesh->GetElementUV( i );
-		const int numUvs = uvElement->GetDirectArray().GetCount();
+		FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( i );
+		const int numUvs = fbxGeomUv->GetDirectArray().GetCount();
 
-		DzMap* uvMap = dsMesh->getUVs();
-		uvMap->setNumValues( numUvs );
-		DzPnt2* dsUVs = uvMap->getPnt2ArrayPtr();
+		DzMap* dsUvMap = dsMesh->getUVs();
+		dsUvMap->setNumValues( numUvs );
+		DzPnt2* dsUVs = dsUvMap->getPnt2ArrayPtr();
 
 		for ( int j = 0; j < numUvs; j++ )
 		{
-			FbxVector2 fbxUv = uvElement->GetDirectArray().GetAt( j );
+			FbxVector2 fbxUv = fbxGeomUv->GetDirectArray().GetAt( j );
 			dsUVs[j][0] = fbxUv[0];
 			dsUVs[j][1] = fbxUv[1];
 		}
@@ -1476,15 +1475,14 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 
 	bool needsSubd = false;
 
-	// copy subd edge weights
+	// subd vertex weights ---
 	for ( int i = 0; i < fbxMesh->GetElementVertexCreaseCount(); i++ )
 	{
-		FbxGeometryElementCrease* element = fbxMesh->GetElementVertexCrease( i );
-		const int num = element->GetDirectArray().GetCount();
-
+		FbxGeometryElementCrease* fbxSubdVertexCrease = fbxMesh->GetElementVertexCrease( i );
+		const int num = fbxSubdVertexCrease->GetDirectArray().GetCount();
 		for ( int j = 0; j < num; j++ )
 		{
-			double v = element->GetDirectArray().GetAt( j );
+			double v = fbxSubdVertexCrease->GetDirectArray().GetAt( j );
 			if ( v > 0 )
 			{
 				needsSubd = true;
@@ -1505,7 +1503,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		break;
 	}
 
-	// copy materials
+	// materials ---
 	for ( int i = 0; i < fbxNode->GetMaterialCount(); i++ )
 	{
 		QColor diffuseColor = Qt::white;
@@ -1675,12 +1673,12 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		dsMesh->activateMaterial( dsMaterial->getName() );
 	}
 
-	//check whether the material maps with only one mesh
+	// check whether the material maps with only one mesh
 	bool matsAllSame = true;
 	for ( int i = 0; i < fbxMesh->GetElementMaterialCount(); i++ )
 	{
-		FbxGeometryElementMaterial* lMaterialElement = fbxMesh->GetElementMaterial( i );
-		if ( lMaterialElement->GetMappingMode() == FbxGeometryElement::eByPolygon )
+		const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( i );
+		if ( fbxMaterial->GetMappingMode() == FbxGeometryElement::eByPolygon )
 		{
 			matsAllSame = false;
 			break;
@@ -1691,83 +1689,82 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	{
 		for ( int i = 0; i < fbxMesh->GetElementMaterialCount(); i++ )
 		{
-			FbxGeometryElementMaterial* lMaterialElement = fbxMesh->GetElementMaterial( i );
-			if ( lMaterialElement->GetMappingMode() == FbxGeometryElement::eAllSame )
+			const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( i );
+			if ( fbxMaterial->GetMappingMode() == FbxGeometryElement::eAllSame )
 			{
-				FbxSurfaceMaterial* lMaterial = fbxMesh->GetNode()->GetMaterial( lMaterialElement->GetIndexArray().GetAt( 0 ) );
-				Q_UNUSED( lMaterial  );
-
-				const int lMatId = lMaterialElement->GetIndexArray().GetAt( 0 );
-				if ( lMatId >= 0 )
+				const int matIdx = fbxMaterial->GetIndexArray().GetAt( 0 );
+				if ( matIdx >= 0 )
 				{
-					dsMesh->activateMaterial( lMatId );
+					dsMesh->activateMaterial( matIdx );
 					break;
 				}
 			}
 		}
 	}
 
-	FbxGeometryElementPolygonGroup* polygonGroup = fbxMesh->GetElementPolygonGroup( 0 );
+	// faces ---
 
 	QMap< QPair<int, int>, int > edgeMap;
 	int numEdges = 0;
 
 	const int numPolygons = fbxMesh->GetPolygonCount();
-	int curGroupId = -1;
+
+	const FbxGeometryElementPolygonGroup* fbxPolygonGroup = fbxMesh->GetElementPolygonGroup( 0 );
+	int curGroupIdx = -1;
 	for ( int i = 0; i < numPolygons; i++ )
 	{
-		// material
+		// active material group
 		if ( !matsAllSame )
 		{
 			for ( int j = 0; j < fbxMesh->GetElementMaterialCount(); j++ )
 			{
-				FbxGeometryElementMaterial* lMaterialElement = fbxMesh->GetElementMaterial( j );
-				FbxSurfaceMaterial* lMaterial = fbxMesh->GetNode()->GetMaterial( lMaterialElement->GetIndexArray().GetAt( i ) );
-				const int lMatId = lMaterialElement->GetIndexArray().GetAt( i );
-
-				if ( lMatId >= 0 )
+				const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( j );
+				const int matIdx = fbxMaterial->GetIndexArray().GetAt( i );
+				if ( matIdx >= 0 )
 				{
-					dsMesh->activateMaterial( lMatId );
+					dsMesh->activateMaterial( matIdx );
 					break;
 				}
 			}
 		}
 
-		if ( polygonGroup )
+		// active face group
+		if ( fbxPolygonGroup )
 		{
-			const int groupId = polygonGroup->GetIndexArray().GetAt( i );
-			if ( groupId != curGroupId )
+			const int groupIdx = fbxPolygonGroup->GetIndexArray().GetAt( i );
+			if ( groupIdx != curGroupIdx )
 			{
-				curGroupId = groupId;
-				dsMesh->activateFaceGroup( "fbx_group_" % QString::number( groupId ) );
+				curGroupIdx = groupIdx;
+				dsMesh->activateFaceGroup( "fbx_group_" % QString::number( groupIdx ) );
 			}
 		}
 
-
-		// verts
+		// facet vertices
 		const int numIndices = fbxMesh->GetPolygonSize( i );
-		DzFacet face;
 		int triFanRoot = -1;
 		for ( int j = 0; j < numIndices; j++ )
 		{
+			DzFacet face;
+			// quads, tris, lines
 			if ( numIndices <= 4 )
 			{
 				face.m_vertIdx[j] = fbxMesh->GetPolygonVertex( i, j );
 				face.m_normIdx[j] = face.m_vertIdx[j];
 
+				// facet UVs
 				for ( int k = 0; k < fbxMesh->GetElementUVCount(); k++ )
 				{
-					FbxGeometryElementUV* leUV = fbxMesh->GetElementUV( k );
-					switch ( leUV->GetMappingMode() )
+					FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( k );
+					switch ( fbxGeomUv->GetMappingMode() )
 					{
 					case FbxGeometryElement::eByControlPoint:
-						switch ( leUV->GetReferenceMode() )
+						switch ( fbxGeomUv->GetReferenceMode() )
 						{
 						case FbxGeometryElement::eDirect:
 							face.m_uvwIdx[j] = face.m_vertIdx[j];
 							break;
 						case FbxGeometryElement::eIndexToDirect:
-							face.m_uvwIdx[j] = leUV->GetIndexArray().GetAt( face.m_vertIdx[j] );
+							face.m_uvwIdx[j] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[j] );
 							break;
 						default:
 							break;
@@ -1789,6 +1786,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 					dsMesh->addFacet( face.m_vertIdx, face.m_uvwIdx );
 				}
 			}
+			// n-gons
 			else if ( j >= 2 )
 			{
 				const bool isRoot = j == 2;
@@ -1842,14 +1840,14 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 #endif
 				}
 
-
+				// facet UVs
 				for ( int k = 0; k < fbxMesh->GetElementUVCount(); k++ )
 				{
-					FbxGeometryElementUV* leUV = fbxMesh->GetElementUV( k );
-					switch ( leUV->GetMappingMode() )
+					FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( k );
+					switch ( fbxGeomUv->GetMappingMode() )
 					{
 					case FbxGeometryElement::eByControlPoint:
-						switch ( leUV->GetReferenceMode() )
+						switch ( fbxGeomUv->GetReferenceMode() )
 						{
 						case FbxGeometryElement::eDirect:
 							face.m_uvwIdx[0] = face.m_vertIdx[0];
@@ -1858,9 +1856,9 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 							face.m_uvwIdx[3] = -1;
 							break;
 						case FbxGeometryElement::eIndexToDirect:
-							face.m_uvwIdx[0] = leUV->GetIndexArray().GetAt( face.m_vertIdx[0] );
-							face.m_uvwIdx[1] = leUV->GetIndexArray().GetAt( face.m_vertIdx[j - 1] );
-							face.m_uvwIdx[2] = leUV->GetIndexArray().GetAt( face.m_vertIdx[j] );
+							face.m_uvwIdx[0] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[0] );
+							face.m_uvwIdx[1] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[j - 1] );
+							face.m_uvwIdx[2] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[j] );
 							face.m_uvwIdx[3] = -1;
 							break;
 						default:
@@ -1921,17 +1919,18 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		}
 	}
 
+	// subdivision edge weights
 	for ( int i = 0; i < fbxMesh->GetElementEdgeCreaseCount(); i++ )
 	{
-		FbxGeometryElementCrease* element = fbxMesh->GetElementEdgeCrease( i );
-		int num = element->GetDirectArray().GetCount();
+		FbxGeometryElementCrease* fbxSubdEdgeCrease = fbxMesh->GetElementEdgeCrease( i );
+		int num = fbxSubdEdgeCrease->GetDirectArray().GetCount();
 		Q_UNUSED( num )
 
 		QMap< QPair<int, int>, int >::iterator j;
 		for ( j = edgeMap.begin(); j != edgeMap.end(); ++j )
 		{
 			int jj = j.value();
-			float v = element->GetDirectArray().GetAt( jj );
+			float v = fbxSubdEdgeCrease->GetDirectArray().GetAt( jj );
 			int v0 = j.key().first;
 			int v1 = j.key().second;
 			if ( v > 0 )
@@ -1973,8 +1972,10 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	dsMeshNode->setObject( dsObject );
 
 
+	// mesh modifiers ---
 	for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
 	{
+		// skin binding
 		FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( i );
 		if ( dsFigure && fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
 		{
@@ -1986,6 +1987,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 
 			m_skins.push_back( skinning );
 		}
+		// morphs
 		else if ( fbxDeformer->GetClassId().Is( FbxBlendShape::ClassId ) )
 		{
 			DzPnt3* values = new DzPnt3[numVertices];
