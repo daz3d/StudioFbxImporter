@@ -626,8 +626,15 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 #if DZ_SDK_4_12_OR_GREATER
 			dsSkin->setBindingMode( DzSkinBinding::General );
 			dsSkin->setScaleMode( DzSkinBinding::BindingMaps );
+
+			dsSkin->setGeneralMapMode(
+				fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ?
+					DzSkinBinding::DualQuat :
+					DzSkinBinding::Linear
+			);
+
 #else
-			// DzSkinBinding::setBindingMode() and DzSkinBinding::setScaleMode()
+			// DzSkinBinding::setBindingMode(), DzSkinBinding::setScaleMode(), and DzSkinBinding::setGeneralMapMode()
 			// are not in the 4.5 SDK, so we attempt to use the meta-object to
 			// call these methods.
 
@@ -636,7 +643,29 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 
 			QMetaObject::invokeMethod( dsSkin,
 				"setScaleMode", Q_ARG( int, 1 ) );
+
+			QMetaObject::invokeMethod( dsSkin,
+				"setGeneralMapMode",
+				Q_ARG( int, fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ? 1 : 0 ) );
 #endif
+
+			if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && m_skins[i].m_blendWeights )
+			{
+#if DZ_SDK_4_12_OR_GREATER
+				dsSkin->setBindingMode( DzSkinBinding::Blended );
+				dsSkin->setBlendMap( m_skins[i].m_blendWeights );
+				dsSkin->setBlendMode( DzSkinBinding::BlendLinearDualQuat );
+#else
+				QMetaObject::invokeMethod( dsSkin,
+					"setBindingMode", Q_ARG( int, 2 ) );
+
+				QMetaObject::invokeMethod( dsSkin,
+					"setBlendMap", Q_ARG( DzWeightMap*, m_skins[i].m_blendWeights.operator->() ) );
+
+				QMetaObject::invokeMethod( dsSkin,
+					"setBlendMode", Q_ARG( int, 1 ) );
+#endif
+			}
 		}
 
 		fbxImportAnim( m_root );

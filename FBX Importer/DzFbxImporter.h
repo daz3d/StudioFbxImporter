@@ -27,6 +27,7 @@
 #include "dzfileio.h"
 #include "dzimporter.h"
 #include "dzvec3.h"
+#include "dzweightmap.h"
 
 #include <fbxsdk.h>
 
@@ -139,6 +140,7 @@ private:
 		FbxSkin*	fbxSkin;
 		DzFigure*	dsFigure;
 		int			numVertices;
+		DzWeightMapPtr	m_blendWeights;
 	};
 
 	void		fbxPreRecurse( FbxNode* fbxNode );
