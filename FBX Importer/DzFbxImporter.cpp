@@ -42,6 +42,7 @@
 #include "dzmorphdeltas.h"
 #include "dznode.h"
 #include "dzobject.h"
+#include "dzpresentation.h"
 #include "dzprogress.h"
 #include "dzscene.h"
 #include "dzsettings.h"
@@ -900,6 +901,80 @@ static void setNodeScaling( DzNode* dsNode, FbxNode* fbxNode )
 	dsNode->getZScaleControl()->setValue( scaling[2] );
 }
 
+static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
+{
+	QString presentationType;
+	QString autoFitBase;
+	QString preferredBase;
+
+#if FBXSDK_VERSION_MAJOR >= 2016
+	const FbxProperty fbxPresentationTypeProperty = fbxNode->FindProperty( "StudioPresentationType" );
+	if ( fbxPresentationTypeProperty.IsValid() )
+	{
+		presentationType = QString( fbxPresentationTypeProperty.Get<FbxString>() );
+	}
+
+	const FbxProperty fbxPresentationAutoFitBaseProperty = fbxNode->FindProperty( "StudioPresentationAutoFitBase" );
+	if ( fbxPresentationAutoFitBaseProperty.IsValid() )
+	{
+		autoFitBase = QString( fbxPresentationAutoFitBaseProperty.Get<FbxString>() );
+	}
+
+	const FbxProperty fbxPresentationPreferredBaseProperty = fbxNode->FindProperty( "StudioPresentationPreferredBase" );
+	if ( fbxPresentationPreferredBaseProperty.IsValid() )
+	{
+		preferredBase = QString( fbxPresentationPreferredBaseProperty.Get<FbxString>() );
+	}
+#endif
+
+	if ( presentationType.isEmpty()
+		&& autoFitBase.isEmpty()
+		&& preferredBase.isEmpty() )
+	{
+		return;
+	}
+
+	DzPresentation* presentation = dsNode->getPresentation();
+	if ( !presentation )
+	{
+		presentation = new DzPresentation();
+		dsNode->setPresentation( presentation );
+	}
+
+	if ( !presentationType.isEmpty() )
+	{
+		presentation->setType( presentationType );
+	}
+
+	if ( !autoFitBase.isEmpty() )
+	{
+#if DZ_SDK_4_12_OR_GREATER
+		presentation->setAutoFitBase( autoFitBase );
+#else
+		// DzPresentation::setAutoFitBase() is not in the 4.5 SDK, so we attempt
+		// to use the meta-object to call the method.
+
+		bool set = QMetaObject::invokeMethod( presentation, "setAutoFitBase",
+			Q_ARG( QString, autoFitBase ) );
+		Q_UNUSED( set )
+#endif //DZ_SDK_4_12_OR_GREATER
+	}
+
+	if ( !preferredBase.isEmpty() )
+	{
+#if DZ_SDK_4_12_OR_GREATER
+		presentation->setPreferredBase( preferredBase );
+#else
+		// DzPresentation::setPreferredBase() is not in the 4.5 SDK, so we attempt
+		// to use the meta-object to call the method.
+
+		bool set = QMetaObject::invokeMethod( presentation, "setPreferredBase",
+			Q_ARG( QString, preferredBase ) );
+		Q_UNUSED( set )
+#endif //DZ_SDK_4_12_OR_GREATER
+	}
+}
+
 static bool _allClose( double a, double b, double c )
 {
 	if ( qAbs( a - b ) > 0.0000000001f || qAbs( a - c ) > 0.0000000001f )
@@ -1094,6 +1169,8 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 			node->dsNode->setLabel( QString( fbxPropertyNodeLabel.Get<FbxString>() ) );
 		}
 #endif
+
+		setNodePresentation( node->dsNode, node->fbxNode );
 
 		setNodeInheritsScale( node->dsNode, node->fbxNode );
 
