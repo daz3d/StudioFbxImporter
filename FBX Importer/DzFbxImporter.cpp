@@ -13,12 +13,20 @@
 	See the License for the specific language governing permissions and
 	limitations under the License.
 **********************************************************************/
-
+/*****************************
+	Include files
+*****************************/
+// Direct Relation
 #include "DzFbxImporter.h"
 
+// System
+
+// Standard Library
+
+// Qt
 #include <QtGui/QComboBox>
 
-// Public SDK
+// DS Public SDK
 #include "dzapp.h"
 #include "dzbone.h"
 #include "dzbonebinding.h"
@@ -40,6 +48,12 @@
 #include "dzskinbinding.h"
 #include "dzstyle.h"
 #include "dzversion.h"
+
+// Project Specific
+
+/*****************************
+	Local Definitions
+*****************************/
 
 #if FBXSDK_VERSION_MAJOR >= 2016
 #define DATA_FBX_USER_PROPERTIES "FbxUserProperties"
@@ -348,17 +362,18 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 		const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
 		const int numLayers = animStack->GetMemberCount<FbxAnimLayer>();
 
+		const char* stackName = animStack->GetName();
 		QString error;
 		if ( numLayers == 0 )
 		{
-			errors += "Unexpected: " % QString( animStack->GetName() ) % " has no layers \n";
+			errors += "Unexpected: " % QString( stackName ) % " has no layers.\n";
 		}
 		else if ( numLayers > 1 )
 		{
-			errors += "Animation Limitation: " % QString( animStack->GetName() ) % " has multiple layers \n";
+			errors += "Animation Limitation: " % QString( stackName ) % " has multiple layers.\n";
 		}
 
-		animStackNames.push_back( QString( animStack->GetName() ) );
+		animStackNames.push_back( QString( stackName ) );
 	}
 
 
@@ -747,7 +762,8 @@ static FbxVector4 calcFbxRotationOffset( FbxNode* fbxNode )
 	{
 		bool applyOffset = true;
 
-		if ( fbxNode->GetNodeAttribute() && fbxNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eMesh )
+		if ( fbxNode->GetNodeAttribute()
+			&& fbxNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eMesh )
 		{
 			applyOffset = false;
 		}
@@ -841,9 +857,10 @@ void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode )
 			FbxSkin* fbxSkin = static_cast< FbxSkin* >( deformer );
 			for ( int j = 0; j < fbxSkin->GetClusterCount(); j++ )
 			{
-				FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
-				if ( !fbxClusterNode->GetNodeAttribute() ||
-					fbxClusterNode->GetNodeAttribute()->GetAttributeType() != FbxNodeAttribute::eSkeleton )
+				const FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
+				if ( !fbxClusterNode
+					|| !fbxClusterNode->GetNodeAttribute()
+					|| fbxClusterNode->GetNodeAttribute()->GetAttributeType() != FbxNodeAttribute::eSkeleton )
 				{
 					m_rigErrorSkin = true;
 				}
