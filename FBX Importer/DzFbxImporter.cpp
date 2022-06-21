@@ -733,22 +733,22 @@ static FbxVector4 calcFbxRotationOffset( FbxNode* fbxNode )
 	return offset;
 }
 
-static void setOrigin( DzNode* dsNode, FbxNode* fbxNode, DzVec3 offset )
+static void setNodeOrigin( DzNode* dsNode, FbxNode* fbxNode, DzVec3 offset )
 {
 	const DzVec3 origin = offset;
 
 	dsNode->setOrigin( origin, true );
 }
 
-static void setOrientation( DzNode* dsNode, FbxNode* fbxNode )
+static void setNodeOrientation( DzNode* dsNode, FbxNode* fbxNode )
 {
 	FbxVector4 fbxPre = fbxNode->GetPreRotation( FbxNode::eSourcePivot );
-	const DzQuat rot( DzRotationOrder::XYZ, DzVec3( fbxPre[0], fbxPre[1], fbxPre[2] )*DZ_FLT_DEG_TO_RAD );
+	const DzQuat rot( DzRotationOrder::XYZ, DzVec3( fbxPre[0], fbxPre[1], fbxPre[2] ) * DZ_FLT_DEG_TO_RAD );
 
 	dsNode->setOrientation( rot, true );
 }
 
-static void setRotationOrder( DzNode* dsNode, FbxNode* fbxNode )
+static void setNodeRotationOrder( DzNode* dsNode, FbxNode* fbxNode )
 {
 	DzRotationOrder dsRotationOrder( DzRotationOrder::XYZ );
 	EFbxRotationOrder fbxRotationOrder( eEulerXYZ );
@@ -980,9 +980,9 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		}
 
 		const FbxVector4 rotationOffset = calcFbxRotationOffset( node->fbxNode );
-		setOrigin( node->dsNode, node->fbxNode, toVec3( rotationOffset ) );
-		setOrientation( node->dsNode, node->fbxNode );
-		setRotationOrder( node->dsNode, node->fbxNode );
+		setNodeOrigin( node->dsNode, node->fbxNode, toVec3( rotationOffset ) );
+		setNodeOrientation( node->dsNode, node->fbxNode );
+		setNodeRotationOrder( node->dsNode, node->fbxNode );
 
 		if ( rotationOffset.SquareLength() == 0.0 )
 		{
