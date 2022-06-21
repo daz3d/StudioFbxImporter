@@ -56,6 +56,7 @@ namespace
 {
 
 const QString c_optionTake( "Take" );
+const QString c_optionRunSilent( "RunSilent" );
 
 DzFigure* createFigure()
 {
@@ -227,8 +228,8 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 		return;
 	}
 
-	options->setStringValue( c_optionTake, "" );
-	options->setIntValue( "RunSilent", 0 );
+	options->setStringValue( c_optionTake, QString() );
+	options->setIntValue( c_optionRunSilent, 0 );
 }
 
 
@@ -286,7 +287,7 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 		"getOptionsShown", Q_RETURN_ARG( bool, optionsShown ) );
 #endif
 
-	if ( optionsShown || impOptions->getIntValue( "RunSilent", 0 ) )
+	if ( optionsShown || impOptions->getIntValue( c_optionRunSilent, 0 ) )
 	{
 		if ( optionsShown )
 		{
@@ -391,7 +392,7 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 	frame->getOptions( options );
 
 	// if handling the options dialog ourselves, we also need to save the state
-	options->setIntValue( "RunSilent", 0 );
+	options->setIntValue( c_optionRunSilent, 0 );
 	saveOptions( options );
 
 	return true;
