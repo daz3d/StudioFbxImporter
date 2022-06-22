@@ -1408,38 +1408,24 @@ DzTexture* DzFbxImporter::toTexture( FbxProperty fbxProperty )
 
 /**
 **/
-void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode )
+void DzFbxImporter::fbxImportVertices( int numVertices, FbxVector4* fbxVertices, DzFacetMesh* dsMesh, DzVec3 offset )
 {
-	FbxMesh* fbxMesh = fbxNode->GetMesh();
-	DzObject* dsObject = new DzObject();
-	DzFacetMesh* dsMesh = new DzFacetMesh();
-	DzFacetShape* dsShape = new DzFacetShape();
-	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsMeshNode );
-
-	DzVec3 offset( 0, 0, 0 );
-	if ( dsFigure )
-	{
-		offset = dsFigure->getOrigin();
-	}
-
-	// begin the edit
-	dsMesh->beginEdit();
-
-	// vertices ---
-	int numVertices = fbxMesh->GetControlPointsCount();
-	FbxVector4* fbxVertices = fbxMesh->GetControlPoints();
 	DzPnt3* dsVertices = dsMesh->setVertexArray( numVertices );
-	for ( int i = 0; i < numVertices ; i++ )
+	for ( int i = 0; i < numVertices; i++ )
 	{
 		dsVertices[i][0] = fbxVertices[i][0] + offset[0];
 		dsVertices[i][1] = fbxVertices[i][1] + offset[1];
 		dsVertices[i][2] = fbxVertices[i][2] + offset[2];
 	}
+}
 
-	// UVs ---
-	for ( int i = 0; i < fbxMesh->GetElementUVCount(); i++ )
+/**
+**/
+void DzFbxImporter::fbxImportUVs( FbxMesh* fbxMesh, DzFacetMesh* dsMesh )
+{
+	for ( int i = 0, n = fbxMesh->GetElementUVCount(); i < n; i++ )
 	{
-		FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( i );
+		const FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( i );
 		const int numUvs = fbxGeomUv->GetDirectArray().GetCount();
 
 		DzMap* dsUvMap = dsMesh->getUVs();
@@ -1448,7 +1434,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 
 		for ( int j = 0; j < numUvs; j++ )
 		{
-			FbxVector2 fbxUv = fbxGeomUv->GetDirectArray().GetAt( j );
+			const FbxVector2 fbxUv = fbxGeomUv->GetDirectArray().GetAt( j );
 			dsUVs[j][0] = fbxUv[0];
 			dsUVs[j][1] = fbxUv[1];
 		}
@@ -1456,29 +1442,30 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		// only do the first
 		break;
 	}
+}
 
-	bool needsSubd = false;
-
-	// subd vertex weights ---
-	for ( int i = 0; i < fbxMesh->GetElementVertexCreaseCount(); i++ )
+/**
+**/
+void DzFbxImporter::fbxImportSubdVertexWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool &enableSubd )
+{
+	for ( int i = 0, n = fbxMesh->GetElementVertexCreaseCount(); i < n; i++ )
 	{
-		FbxGeometryElementCrease* fbxSubdVertexCrease = fbxMesh->GetElementVertexCrease( i );
-		const int num = fbxSubdVertexCrease->GetDirectArray().GetCount();
-		for ( int j = 0; j < num; j++ )
+		const FbxGeometryElementCrease* fbxSubdVertexCrease = fbxMesh->GetElementVertexCrease( i );
+		for ( int j = 0, m = fbxSubdVertexCrease->GetDirectArray().GetCount(); j < m; j++ )
 		{
-			double v = fbxSubdVertexCrease->GetDirectArray().GetAt( j );
-			if ( v > 0 )
+			const double weight = fbxSubdVertexCrease->GetDirectArray().GetAt( j );
+			if ( weight > 0 )
 			{
-				needsSubd = true;
+				enableSubd = true;
 
 #if DZ_SDK_4_12_OR_GREATER
-				dsMesh->setVertexWeight( j, v );
+				dsMesh->setVertexWeight( j, weight );
 #else
 				// DzFacetMesh::setVertexWeight() is not in the 4.5 SDK, so we
 				// attempt to use the meta-object to call the method.
 
 				bool im = QMetaObject::invokeMethod( dsMesh, "setVertexWeight",
-					Q_ARG( int, j ), Q_ARG( int, v ) );
+					Q_ARG( int, j ), Q_ARG( int, weight ) );
 				Q_UNUSED( im )
 #endif
 			}
@@ -1487,9 +1474,13 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		// only do the first
 		break;
 	}
+}
 
-	// materials ---
-	for ( int i = 0; i < fbxNode->GetMaterialCount(); i++ )
+/**
+**/
+void DzFbxImporter::fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFacetMesh* dsMesh, DzFacetShape* dsShape, bool &matsAllSame )
+{
+	for ( int i = 0, n = fbxNode->GetMaterialCount(); i < n; i++ )
 	{
 		QColor diffuseColor = Qt::white;
 		DzTexturePtr diffuseMap = NULL;
@@ -1631,7 +1622,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 			// the meta-object to call the methods. If this fails, we attempt to
 			// find the properties by name and if found set their respective values.
 
-			 //use "setGlossyRoughness" double if using DzUberIrayMaterial
+			// use "setGlossyRoughness" double if using DzUberIrayMaterial
 			if ( !QMetaObject::invokeMethod( dsMaterial,
 				"setRoughness", Q_ARG( float, roughness ) ) )
 			{
@@ -1658,9 +1649,8 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		dsMesh->activateMaterial( dsMaterial->getName() );
 	}
 
-	// check whether the material maps with only one mesh
-	bool matsAllSame = true;
-	for ( int i = 0; i < fbxMesh->GetElementMaterialCount(); i++ )
+	matsAllSame = true;
+	for ( int i = 0, n = fbxMesh->GetElementMaterialCount(); i < n; i++ )
 	{
 		const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( i );
 		if ( fbxMaterial->GetMappingMode() == FbxGeometryElement::eByPolygon )
@@ -1672,7 +1662,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 
 	if ( matsAllSame )
 	{
-		for ( int i = 0; i < fbxMesh->GetElementMaterialCount(); i++ )
+		for ( int i = 0, n = fbxMesh->GetElementMaterialCount(); i < n; i++ )
 		{
 			const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( i );
 			if ( fbxMaterial->GetMappingMode() == FbxGeometryElement::eAllSame )
@@ -1686,10 +1676,12 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 			}
 		}
 	}
+}
 
-	// faces ---
-
-	QMap< QPair<int, int>, int > edgeMap;
+/**
+**/
+void DzFbxImporter::fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool matsAllSame, QMap<QPair<int, int>, int> &edgeMap )
+{
 	int numEdges = 0;
 
 	const int numPolygons = fbxMesh->GetPolygonCount();
@@ -1701,18 +1693,19 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	const bool compatPolyGroup = fbxPolygonGroup && numPolygons == fbxPolygonGroup->GetIndexArray().GetCount();
 
 	int curGroupIdx = -1;
-	for ( int i = 0; i < numPolygons; i++ )
+	for ( int polyIdx = 0; polyIdx < numPolygons; polyIdx++ )
 	{
 		// active material group
 		if ( !matsAllSame )
 		{
-			for ( int j = 0; j < fbxMesh->GetElementMaterialCount(); j++ )
+			for ( int matElemIdx = 0, numMatElements = fbxMesh->GetElementMaterialCount();
+				matElemIdx < numMatElements; matElemIdx++ )
 			{
-				const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( j );
-				const int matIdx = fbxMaterial->GetIndexArray().GetAt( i );
-				if ( matIdx >= 0 )
+				const FbxGeometryElementMaterial* fbxMaterial = fbxMesh->GetElementMaterial( matElemIdx );
+				const int polyMatIdx = fbxMaterial->GetIndexArray().GetAt( polyIdx );
+				if ( polyMatIdx >= 0 )
 				{
-					dsMesh->activateMaterial( matIdx );
+					dsMesh->activateMaterial( polyMatIdx );
 					break;
 				}
 			}
@@ -1721,7 +1714,7 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		// active face group
 		if ( compatPolyGroup )
 		{
-			const int groupIdx = fbxPolygonGroup->GetIndexArray().GetAt( i );
+			const int groupIdx = fbxPolygonGroup->GetIndexArray().GetAt( polyIdx );
 			if ( groupIdx != curGroupIdx )
 			{
 				curGroupIdx = groupIdx;
@@ -1729,40 +1722,41 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 			}
 		}
 
-		DzFacet face;
+		DzFacet face; //keep outside of for loop
 
 		// facet vertices
-		const int numIndices = fbxMesh->GetPolygonSize( i );
 		int triFanRoot = -1;
-		for ( int j = 0; j < numIndices; j++ )
+		for ( int polyVertIdx = 0, numPolyVerts = fbxMesh->GetPolygonSize( polyIdx );
+			polyVertIdx < numPolyVerts; polyVertIdx++ )
 		{
 			// quads, tris, lines
-			if ( numIndices <= 4 )
+			if ( numPolyVerts <= 4 )
 			{
-				face.m_vertIdx[j] = fbxMesh->GetPolygonVertex( i, j );
-				face.m_normIdx[j] = face.m_vertIdx[j];
+				face.m_vertIdx[polyVertIdx] = fbxMesh->GetPolygonVertex( polyIdx, polyVertIdx );
+				face.m_normIdx[polyVertIdx] = face.m_vertIdx[polyVertIdx];
 
 				// facet UVs
-				for ( int k = 0; k < fbxMesh->GetElementUVCount(); k++ )
+				for ( int uvElemIdx = 0, numUvElems = fbxMesh->GetElementUVCount();
+					uvElemIdx < numUvElems; uvElemIdx++ )
 				{
-					FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( k );
+					const FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( uvElemIdx );
 					switch ( fbxGeomUv->GetMappingMode() )
 					{
 					case FbxGeometryElement::eByControlPoint:
 						switch ( fbxGeomUv->GetReferenceMode() )
 						{
 						case FbxGeometryElement::eDirect:
-							face.m_uvwIdx[j] = face.m_vertIdx[j];
+							face.m_uvwIdx[polyVertIdx] = face.m_vertIdx[polyVertIdx];
 							break;
 						case FbxGeometryElement::eIndexToDirect:
-							face.m_uvwIdx[j] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[j] );
+							face.m_uvwIdx[polyVertIdx] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[polyVertIdx] );
 							break;
 						default:
 							break;
 						}
 						break;
 					case FbxGeometryElement::eByPolygonVertex:
-						face.m_uvwIdx[j] = fbxMesh->GetTextureUVIndex( i, j );
+						face.m_uvwIdx[polyVertIdx] = fbxMesh->GetTextureUVIndex( polyIdx, polyVertIdx );
 						break;
 					default:
 						break;
@@ -1772,19 +1766,19 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 					break;
 				}
 
-				if ( j == numIndices - 1 )
+				if ( polyVertIdx == numPolyVerts - 1 )
 				{
 					dsMesh->addFacet( face.m_vertIdx, face.m_uvwIdx );
 				}
 			}
 			// n-gons
-			else if ( j >= 2 )
+			else if ( polyVertIdx >= 2 )
 			{
-				const bool isRoot = j == 2;
+				const bool isRoot = polyVertIdx == 2;
 
-				face.m_vertIdx[0] = fbxMesh->GetPolygonVertex( i, 0 );
-				face.m_vertIdx[1] = fbxMesh->GetPolygonVertex( i, j - 1 );
-				face.m_vertIdx[2] = fbxMesh->GetPolygonVertex( i, j );
+				face.m_vertIdx[0] = fbxMesh->GetPolygonVertex( polyIdx, 0 );
+				face.m_vertIdx[1] = fbxMesh->GetPolygonVertex( polyIdx, polyVertIdx - 1 );
+				face.m_vertIdx[2] = fbxMesh->GetPolygonVertex( polyIdx, polyVertIdx );
 				face.m_vertIdx[3] = -1;
 				face.m_normIdx[0] = face.m_vertIdx[0];
 				face.m_normIdx[1] = face.m_vertIdx[1];
@@ -1809,13 +1803,13 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 				if ( isRoot )
 				{
 #if DZ_SDK_4_12_OR_GREATER
-					face.setTriFanCount( numIndices - 2 );
+					face.setTriFanCount( numPolyVerts - 2 );
 #else
 					// DzFacet::setTriFanCount() is not in the 4.5 SDK, and DzFacet
 					// is not derived from QObject, so we must modify the member
 					// directly.
 
-					face.m_edges[3] = -numIndices;
+					face.m_edges[3] = -numPolyVerts;
 #endif
 				}
 				else
@@ -1832,9 +1826,10 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 				}
 
 				// facet UVs
-				for ( int k = 0; k < fbxMesh->GetElementUVCount(); k++ )
+				for ( int uvElemIdx = 0, numUvElems = fbxMesh->GetElementUVCount();
+					uvElemIdx < numUvElems; uvElemIdx++ )
 				{
-					FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( k );
+					const FbxGeometryElementUV* fbxGeomUv = fbxMesh->GetElementUV( uvElemIdx );
 					switch ( fbxGeomUv->GetMappingMode() )
 					{
 					case FbxGeometryElement::eByControlPoint:
@@ -1842,14 +1837,14 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 						{
 						case FbxGeometryElement::eDirect:
 							face.m_uvwIdx[0] = face.m_vertIdx[0];
-							face.m_uvwIdx[1] = face.m_vertIdx[j - 1];
-							face.m_uvwIdx[2] = face.m_vertIdx[j];
+							face.m_uvwIdx[1] = face.m_vertIdx[polyVertIdx - 1];
+							face.m_uvwIdx[2] = face.m_vertIdx[polyVertIdx];
 							face.m_uvwIdx[3] = -1;
 							break;
 						case FbxGeometryElement::eIndexToDirect:
 							face.m_uvwIdx[0] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[0] );
-							face.m_uvwIdx[1] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[j - 1] );
-							face.m_uvwIdx[2] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[j] );
+							face.m_uvwIdx[1] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[polyVertIdx - 1] );
+							face.m_uvwIdx[2] = fbxGeomUv->GetIndexArray().GetAt( face.m_vertIdx[polyVertIdx] );
 							face.m_uvwIdx[3] = -1;
 							break;
 						default:
@@ -1857,9 +1852,9 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 						}
 						break;
 					case FbxGeometryElement::eByPolygonVertex:
-						face.m_uvwIdx[0] = fbxMesh->GetTextureUVIndex( i, j );
-						face.m_uvwIdx[1] = fbxMesh->GetTextureUVIndex( i, j - 1 );
-						face.m_uvwIdx[2] = fbxMesh->GetTextureUVIndex( i, j );
+						face.m_uvwIdx[0] = fbxMesh->GetTextureUVIndex( polyIdx, polyVertIdx );
+						face.m_uvwIdx[1] = fbxMesh->GetTextureUVIndex( polyIdx, polyVertIdx - 1 );
+						face.m_uvwIdx[2] = fbxMesh->GetTextureUVIndex( polyIdx, polyVertIdx );
 						face.m_uvwIdx[3] = -1;
 						break;
 					default:
@@ -1897,46 +1892,49 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 
 
 			{
-				int j0 = j;
-				int j1 = ( j + 1 ) % numIndices;
+				const int polyVertNextIdx = (polyVertIdx + 1) % numPolyVerts;
 
-				int a = fbxMesh->GetPolygonVertex( i, j0 );
-				int b = fbxMesh->GetPolygonVertex( i, j1 );
-				QPair<int, int> pair( qMin( a, b ), qMax( a, b ) );
-				if ( !edgeMap.contains( pair ) )
+				const int edgeVertA = fbxMesh->GetPolygonVertex( polyIdx, polyVertIdx );
+				const int edgeVertB = fbxMesh->GetPolygonVertex( polyIdx, polyVertNextIdx );
+				QPair<int, int> edgeVertPair( qMin( edgeVertA, edgeVertB ), qMax( edgeVertA, edgeVertB ) );
+				if ( !edgeMap.contains( edgeVertPair ) )
 				{
-					edgeMap[pair] = numEdges;
+					edgeMap[edgeVertPair] = numEdges;
 					numEdges++;
 				}
 			}
 		}
 	}
+}
 
-	// subdivision edge weights
-	for ( int i = 0; i < fbxMesh->GetElementEdgeCreaseCount(); i++ )
+/**
+**/
+void DzFbxImporter::fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, QMap<QPair<int, int>, int> edgeMap, bool &enableSubd )
+{
+	for ( int i = 0, n = fbxMesh->GetElementEdgeCreaseCount(); i < n; i++ )
 	{
-		FbxGeometryElementCrease* fbxSubdEdgeCrease = fbxMesh->GetElementEdgeCrease( i );
-		int num = fbxSubdEdgeCrease->GetDirectArray().GetCount();
-		Q_UNUSED( num )
+		const FbxGeometryElementCrease* fbxSubdEdgeCrease = fbxMesh->GetElementEdgeCrease( i );
+		const int numCreases = fbxSubdEdgeCrease->GetDirectArray().GetCount();
+		Q_UNUSED( numCreases )
 
-		QMap< QPair<int, int>, int >::iterator j;
-		for ( j = edgeMap.begin(); j != edgeMap.end(); ++j )
+		QMap< QPair<int, int>, int >::iterator edgeMapIt;
+		for ( edgeMapIt = edgeMap.begin(); edgeMapIt != edgeMap.end(); ++edgeMapIt )
 		{
-			int jj = j.value();
-			float v = fbxSubdEdgeCrease->GetDirectArray().GetAt( jj );
-			int v0 = j.key().first;
-			int v1 = j.key().second;
-			if ( v > 0 )
+			const int edgeIdx = edgeMapIt.value();
+			const float weight = fbxSubdEdgeCrease->GetDirectArray().GetAt( edgeIdx );
+			const int edgeVertA = edgeMapIt.key().first;
+			const int edgeVertB = edgeMapIt.key().second;
+			if ( weight > 0 )
 			{
-				needsSubd = true;
+				enableSubd = true;
 #if DZ_SDK_4_12_OR_GREATER
-				dsMesh->setEdgeWeight( v0, v1, v );
+				dsMesh->setEdgeWeight( edgeVertA, edgeVertB, weight );
 #else
 				// DzFacetMesh::setEdgeWeight() is not in the 4.5 SDK, so we
 				// attempt to use the meta-object to call the method.
 
 				bool im = QMetaObject::invokeMethod( dsMesh, "setEdgeWeight",
-					Q_ARG( int, v0 ), Q_ARG( int, v1 ), Q_ARG( int, v ) );
+					Q_ARG( int, edgeVertA ), Q_ARG( int, edgeVertB ), Q_ARG( int, weight ) );
 				Q_UNUSED( im )
 #endif
 			}
@@ -1945,151 +1943,222 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 		// only do the first
 		break;
 	}
+}
 
+/**
+**/
+void DzFbxImporter::fbxImportSkinBinding( FbxDeformer* fbxDeformer, Node* node, DzFigure* dsFigure, int numVertices )
+{
+	Skinning skinning;
+	skinning.node = node;
+	skinning.fbxSkin = static_cast< FbxSkin* >( fbxDeformer );
+	skinning.dsFigure = dsFigure;
+	skinning.numVertices = numVertices;
 
-	// end the edits
-	dsMesh->finishEdit();
-	dsShape->setFacetMesh( dsMesh );
-
-	if ( needsSubd )
+	if ( skinning.fbxSkin
+		&& skinning.fbxSkin->GetSkinningType() == FbxSkin::eBlend )
 	{
-		dsMesh->enableSubDivision( true );
-
-		if ( DzEnumProperty* lodControl = dsShape->getLODControl() )
+		const int numBlendIndices = skinning.fbxSkin->GetControlPointIndicesCount();
+		int* blendIndices = skinning.fbxSkin->GetControlPointIndices();
+		if ( numBlendIndices > 0 && blendIndices )
 		{
-			lodControl->setValue( lodControl->getNumItems() - 1 ); //set to high res
-			lodControl->setDefaultValue( lodControl->getNumItems() - 1 ); //set to high res
+			skinning.m_blendWeights = new DzWeightMap( numVertices, "Blend Weights" );
+			unsigned short* dsWeightValues = skinning.m_blendWeights->getWeights();
+			for ( int bwIdx = 0; bwIdx < numBlendIndices; ++bwIdx )
+			{
+				const int idx = blendIndices[bwIdx];
+				if ( idx > numVertices )
+				{
+					continue;
+				}
+
+				const double blendWeight = skinning.fbxSkin->GetControlPointBlendWeights()[bwIdx];
+				dsWeightValues[idx] = DZ_USHORT_MAX * blendWeight;
+			}
 		}
 	}
 
-	dsObject->addShape( dsShape );
-	dsMeshNode->setObject( dsObject );
+	m_skins.push_back( skinning );
+}
 
+/**
+**/
+void DzFbxImporter::fbxImportMorph( FbxDeformer* fbxDeformer, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices )
+{
+	DzPnt3* values = new DzPnt3[numVertices];
 
-	// mesh modifiers ---
-	for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
+	FbxBlendShape* fbxBlendShape = static_cast< FbxBlendShape* >( fbxDeformer );
+
+	const int numBlendShapeChannels = fbxBlendShape->GetBlendShapeChannelCount();
+
+	DzProgress progress( "Morphs", numBlendShapeChannels );
+	for ( int blendShapeChanIdx = 0; blendShapeChanIdx < numBlendShapeChannels; blendShapeChanIdx++ )
 	{
-		FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( i );
+		FbxBlendShapeChannel* fbxBlendChannel = fbxBlendShape->GetBlendShapeChannel( blendShapeChanIdx );
+
+		DzMorph* dsMorph = new DzMorph;
+		dsMorph->setName( fbxBlendChannel->GetName() );
+		DzMorphDeltas* dsDeltas = dsMorph->getDeltas();
+
+		DzFloatProperty* morphControl = NULL;
+#if DZ_SDK_4_12_OR_GREATER
+		morphControl = dsMorph->getValueControl();
+#else
+		// DzMorph::getValueControl() is not in the 4.5 SDK, but DzMorph::getValueChannel()
+		// was, so we use the previous name.
+
+		morphControl = dsMorph->getValueChannel();
+#endif
+
+		applyFbxCurve( fbxBlendChannel->DeformPercent.GetCurve( m_fbxAnimLayer ), morphControl, 0.01 );
+
+		for ( int vertIdx = 0; vertIdx < numVertices; vertIdx++ )
+		{
+			values[vertIdx][0] = 0;
+			values[vertIdx][1] = 0;
+			values[vertIdx][2] = 0;
+		}
+
+		for ( int tgtShapeIdx = 0, numTgtShapes = fbxBlendChannel->GetTargetShapeCount();
+			tgtShapeIdx < numTgtShapes; tgtShapeIdx++ )
+		{
+			FbxShape* fbxTargetShape = fbxBlendChannel->GetTargetShape( tgtShapeIdx );
+			FbxVector4* fbxTargetShapeVerts = fbxTargetShape->GetControlPoints();
+			int* fbxTgtShapeVertIndices = fbxTargetShape->GetControlPointIndices();
+			//double weight = fbxBlendChannel->GetTargetShapeFullWeights()[k];
+
+			if ( fbxTgtShapeVertIndices )
+			{
+				for ( int tgtShapeVertIndicesIdx = 0, numTgtShapeVertIndices = fbxTargetShape->GetControlPointIndicesCount();
+					tgtShapeVertIndicesIdx < numTgtShapeVertIndices; tgtShapeVertIndicesIdx++ )
+				{
+					const int vertIdx = fbxTgtShapeVertIndices[tgtShapeVertIndicesIdx];
+					values[vertIdx][0] = fbxTargetShapeVerts[vertIdx][0] - fbxVertices[vertIdx][0];
+					values[vertIdx][1] = fbxTargetShapeVerts[vertIdx][1] - fbxVertices[vertIdx][1];
+					values[vertIdx][2] = fbxTargetShapeVerts[vertIdx][2] - fbxVertices[vertIdx][2];
+				}
+			}
+			else
+			{
+				for ( int vertIdx = 0, numTgtShapeVerts = fbxTargetShape->GetControlPointsCount();
+					vertIdx < numTgtShapeVerts; vertIdx++ )
+				{
+					values[vertIdx][0] = fbxTargetShapeVerts[vertIdx][0] - fbxVertices[vertIdx][0];
+					values[vertIdx][1] = fbxTargetShapeVerts[vertIdx][1] - fbxVertices[vertIdx][1];
+					values[vertIdx][2] = fbxTargetShapeVerts[vertIdx][2] - fbxVertices[vertIdx][2];
+				}
+			}
+		}
+
+		DzIntArray indexes;
+		DzTArray<DzVec3> deltas;
+		for ( int vertIdx = 0; vertIdx < numVertices; vertIdx++ )
+		{
+			if ( values[vertIdx][0] != 0 || values[vertIdx][1] != 0 || values[vertIdx][2] != 0 )
+			{
+				indexes.append( vertIdx );
+				deltas.append( DzVec3( values[vertIdx][0], values[vertIdx][1], values[vertIdx][2] ) );
+			}
+		}
+		dsDeltas->addDeltas( indexes, deltas, false );
+		dsObject->addModifier( dsMorph );
+
+		progress.step();
+	}
+
+	delete[] values;
+}
+
+/**
+**/
+void DzFbxImporter::fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObject* dsObject, DzFigure* dsFigure, int numVertices, FbxVector4* fbxVertices )
+{
+	for ( int deformerIdx = 0, numDeformers = fbxMesh->GetDeformerCount(); deformerIdx < numDeformers; deformerIdx++ )
+	{
+		FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( deformerIdx );
 
 		// skin binding
 		if ( dsFigure && fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
 		{
-			Skinning skinning;
-			skinning.node = node;
-			skinning.fbxSkin = static_cast< FbxSkin* >( fbxDeformer );
-			skinning.dsFigure = dsFigure;
-			skinning.numVertices = numVertices;
-
-			if ( skinning.fbxSkin
-				&& skinning.fbxSkin->GetSkinningType() == FbxSkin::eBlend )
-			{
-				int numBlendIndices = skinning.fbxSkin->GetControlPointIndicesCount();
-				int* blendIndices = skinning.fbxSkin->GetControlPointIndices();
-				if ( numBlendIndices > 0 && blendIndices )
-				{
-					skinning.m_blendWeights = new DzWeightMap( numVertices, "Blend Weights" );
-					unsigned short* dsWeightValues = skinning.m_blendWeights->getWeights();
-					for ( int bwIdx = 0; bwIdx < numBlendIndices; ++bwIdx )
-					{
-						const int idx = blendIndices[bwIdx];
-						if ( idx > numVertices )
-						{
-							continue;
-						}
-
-						const double blendWeight = skinning.fbxSkin->GetControlPointBlendWeights()[bwIdx];
-						dsWeightValues[idx] = DZ_USHORT_MAX * blendWeight;
-					}
-				}
-			}
-
-			m_skins.push_back( skinning );
+			fbxImportSkinBinding( fbxDeformer, node, dsFigure, numVertices );
 		}
 		// morphs
 		else if ( fbxDeformer->GetClassId().Is( FbxBlendShape::ClassId ) )
 		{
-			DzPnt3* values = new DzPnt3[numVertices];
-
-			FbxBlendShape* fbxBlendShape = static_cast< FbxBlendShape* >( fbxDeformer );
-
-			DzProgress progress( "Morphs", fbxBlendShape->GetBlendShapeChannelCount() );
-			for ( int j = 0; j < fbxBlendShape->GetBlendShapeChannelCount(); j++ )
-			{
-				FbxBlendShapeChannel* fbxBlendChannel = fbxBlendShape->GetBlendShapeChannel( j );
-				DzMorph* dsMorph = new DzMorph;
-				dsMorph->setName( fbxBlendChannel->GetName() );
-				DzMorphDeltas* dsDeltas = dsMorph->getDeltas();
-
-				QString name = dsMorph->getName();
-
-				DzFloatProperty* morphControl = NULL;
-#if DZ_SDK_4_12_OR_GREATER
-				morphControl = dsMorph->getValueControl();
-#else
-				// DzMorph::getValueControl() is not in the 4.5 SDK, but DzMorph::getValueChannel()
-				// was, so we use the previous name.
-
-				morphControl = dsMorph->getValueChannel();
-#endif
-
-				applyFbxCurve( fbxBlendChannel->DeformPercent.GetCurve( m_fbxAnimLayer ), morphControl, 0.01 );
-
-				for ( int v = 0; v < numVertices; v++ )
-				{
-					values[v][0] = 0;
-					values[v][1] = 0;
-					values[v][2] = 0;
-				}
-
-				for ( int k = 0; k < fbxBlendChannel->GetTargetShapeCount(); k++ )
-				{
-					FbxShape* fbxShape = fbxBlendChannel->GetTargetShape( k );
-					FbxVector4* fbxShapeVerts = fbxShape->GetControlPoints();
-					int* fbxShapeIndices = fbxShape->GetControlPointIndices();
-					//double weight = fbxBlendChannel->GetTargetShapeFullWeights()[k];
-
-					if ( fbxShapeIndices )
-					{
-						for ( int vv = 0; vv < fbxShape->GetControlPointIndicesCount(); vv++ )
-						{
-							int v = fbxShapeIndices[vv];
-							values[v][0] = fbxShapeVerts[v][0] - fbxVertices[v][0];
-							values[v][1] = fbxShapeVerts[v][1] - fbxVertices[v][1];
-							values[v][2] = fbxShapeVerts[v][2] - fbxVertices[v][2];
-						}
-					}
-					else
-					{
-						for ( int v = 0; v < fbxShape->GetControlPointsCount(); v++ )
-						{
-							values[v][0] = fbxShapeVerts[v][0] - fbxVertices[v][0];
-							values[v][1] = fbxShapeVerts[v][1] - fbxVertices[v][1];
-							values[v][2] = fbxShapeVerts[v][2] - fbxVertices[v][2];
-						}
-					}
-				}
-
-				DzIntArray indexes;
-				DzTArray<DzVec3> deltas;
-				for ( int v = 0; v < numVertices; v++ )
-				{
-					if ( values[v][0] != 0 || values[v][1] != 0 || values[v][2] != 0 )
-					{
-						indexes.append( v );
-						deltas.append( DzVec3( values[v][0], values[v][1], values[v][2] ) );
-					}
-				}
-				dsDeltas->addDeltas( indexes, deltas, false );
-				dsObject->addModifier( dsMorph );
-
-				progress.step();
-			}
-
-			delete[] values;
+			fbxImportMorph( fbxDeformer, dsObject, numVertices, fbxVertices );
 		}
 	}
 }
 
+/**
+**/
+void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode )
+{
+	FbxMesh* fbxMesh = fbxNode->GetMesh();
+	DzObject* dsObject = new DzObject();
+	DzFacetMesh* dsMesh = new DzFacetMesh();
+	DzFacetShape* dsShape = new DzFacetShape();
+	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsMeshNode );
+
+	DzVec3 offset( 0, 0, 0 );
+	if ( dsFigure )
+	{
+		offset = dsFigure->getOrigin();
+	}
+
+	// begin the edit
+	dsMesh->beginEdit();
+
+	const int numVertices = fbxMesh->GetControlPointsCount();
+	FbxVector4* fbxVertices = fbxMesh->GetControlPoints();
+	fbxImportVertices( numVertices, fbxVertices, dsMesh, offset );
+
+	fbxImportUVs( fbxMesh, dsMesh );
+
+	bool enableSubd = false;
+	fbxImportSubdVertexWeights( fbxMesh, dsMesh, enableSubd );
+
+	bool matsAllSame;
+	fbxImportMaterials( fbxNode, fbxMesh, dsMesh, dsShape, matsAllSame );
+
+	QMap< QPair< int, int >, int > edgeMap;
+	fbxImportFaces( fbxMesh, dsMesh, matsAllSame, edgeMap );
+
+	fbxImportSubdEdgeWeights( fbxMesh, dsMesh, edgeMap, enableSubd );
+
+	// end the edit
+	dsMesh->finishEdit();
+
+	dsShape->setFacetMesh( dsMesh );
+
+	setSubdEnabled( enableSubd, dsMesh, dsShape );
+
+	dsObject->addShape( dsShape );
+	dsMeshNode->setObject( dsObject );
+
+	fbxImportMeshModifiers( node, fbxMesh, dsObject, dsFigure, numVertices, fbxVertices );
+}
+
+/**
+**/
+void DzFbxImporter::setSubdEnabled( bool onOff, DzFacetMesh* dsMesh, DzFacetShape* dsShape )
+{
+	if ( !onOff )
+	{
+		return;
+	}
+
+	dsMesh->enableSubDivision( true );
+
+	if ( DzEnumProperty* lodControl = dsShape->getLODControl() )
+	{
+		lodControl->setValue( lodControl->getNumItems() - 1 ); //set to high res
+		lodControl->setDefaultValue( lodControl->getNumItems() - 1 ); //set to high res
+	}
+}
+
+/**
+**/
 void DzFbxImporter::applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale )
 {
 	if ( !fbxCurve || !dsProperty )

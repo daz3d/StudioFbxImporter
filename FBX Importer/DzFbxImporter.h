@@ -37,10 +37,13 @@
 
 class QComboBox;
 
+class DzFacetMesh;
+class DzFacetShape;
 class DzFigure;
 class DzFloatProperty;
 class DzMaterial;
 class DzNode;
+class DzObject;
 class DzSkeleton;
 class DzTexture;
 
@@ -145,9 +148,21 @@ private:
 
 	void		fbxPreRecurse( FbxNode* fbxNode );
 
-	void		fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode );
-	void		applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale = 1 );
 	DzTexture*	toTexture( FbxProperty fbxProperty );
+
+	void		fbxImportVertices( int numVertices, FbxVector4* fbxVertices, DzFacetMesh* dsMesh, DzVec3 offset );
+	void		fbxImportUVs( FbxMesh* fbxMesh, DzFacetMesh* dsMesh );
+	void		fbxImportSubdVertexWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool &enableSubd );
+	void		fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFacetMesh* dsMesh, DzFacetShape* dsShape, bool &matsAllSame );
+	void		fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool matsAllSame, QMap<QPair<int, int>, int> &edgeMap );
+	void		fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, QMap<QPair<int, int>, int> edgeMap, bool &enableSubd );
+	void		fbxImportSkinBinding( FbxDeformer* fbxDeformer, Node* node, DzFigure* dsFigure, int numVertices );
+	void		fbxImportMorph( FbxDeformer* fbxDeformer, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices );
+	void		fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObject* dsObject, DzFigure* dsFigure, int numVertices, FbxVector4* fbxVertices );
+	void		fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode );
+	void		setSubdEnabled( bool onOff, DzFacetMesh* dsMesh, DzFacetShape* dsShape );
+
+	void		applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale = 1 );
 
 	void		fbxImportGraph( Node* node );
 	void		fbxImportSkin( Node* node );
