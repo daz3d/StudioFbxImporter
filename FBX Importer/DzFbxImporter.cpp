@@ -493,17 +493,42 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 
 	const QString takeName = options->getStringValue( c_optionTake );
 
-	for ( int i = 0; i < m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i++ )
-	{
-		const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
-		if ( QString( animStack->GetName() ) == takeName )
-		{
-			m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
+	m_fbxAnimStack = NULL;
+	m_fbxAnimLayer = NULL;
 
-			const int numLayers = m_fbxAnimStack->GetMemberCount<FbxAnimLayer>();
-			if ( numLayers > 0 )
+	if ( !takeName.isEmpty() )
+	{
+		const QString idxPrefix( "idx::" );
+		if ( takeName.startsWith( idxPrefix ) )
+		{
+			bool isNum = false;
+			const int takeIdx = takeName.mid( idxPrefix.length() ).toInt( &isNum );
+			if ( isNum && takeIdx > -1 && takeIdx < m_fbxScene->GetSrcObjectCount<FbxAnimStack>() )
 			{
-				m_fbxAnimLayer = m_fbxAnimStack->GetMember<FbxAnimLayer>( 0 );
+				m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( takeIdx );
+
+				const int numLayers = m_fbxAnimStack->GetMemberCount<FbxAnimLayer>();
+				if ( numLayers > 0 )
+				{
+					m_fbxAnimLayer = m_fbxAnimStack->GetMember<FbxAnimLayer>( 0 );
+				}
+			}
+		}
+		else
+		{
+			for ( int i = 0; i < m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i++ )
+			{
+				const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
+				if ( QString( animStack->GetName() ) == takeName )
+				{
+					m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
+
+					const int numLayers = m_fbxAnimStack->GetMemberCount<FbxAnimLayer>();
+					if ( numLayers > 0 )
+					{
+						m_fbxAnimLayer = m_fbxAnimStack->GetMember<FbxAnimLayer>( 0 );
+					}
+				}
 			}
 		}
 	}
@@ -2216,6 +2241,13 @@ struct DzFbxImportFrame::Data
 	QComboBox*		m_animTakeCmb;
 };
 
+namespace
+{
+
+const char* c_none = QT_TRANSLATE_NOOP( "DzFbxImportFrame", "<None>" );
+
+} //namespace
+
 /**
 **/
 DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animChoices, const QString &errors ) :
@@ -2240,9 +2272,12 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 
 	m_data->m_animTakeCmb = new QComboBox();
 	m_data->m_animTakeCmb->setObjectName( name % "TakeToImportCmb" );
+	m_data->m_animTakeCmb->addItem( tr( c_none ) );
+	//m_data->m_animTakeCmb->insertSeparator(m_data->m_animTakeCmb->count() );
 	m_data->m_animTakeCmb->addItems( animChoices );
+	m_data->m_animTakeCmb->setCurrentIndex( 0 );
 	m_data->m_animTakeCmb->setFixedHeight( btnHeight );
-	animLyt->addWidget( m_data->m_animTakeCmb );
+	animLyt->addWidget( m_data->m_animTakeCmb, 1 );
 
 	mainLyt->addLayout( animLyt );
 
@@ -2293,7 +2328,8 @@ void DzFbxImportFrame::getOptions( DzFileIOSettings* options ) const
 		return;
 	}
 
-	options->setStringValue( c_optionTake, m_data->m_animTakeCmb->currentText() );
+	const QString animTake = m_data->m_animTakeCmb->currentText();
+	options->setStringValue( c_optionTake, animTake != tr( c_none ) ? animTake : QString() );
 }
 
 /**
