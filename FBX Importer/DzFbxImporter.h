@@ -146,7 +146,7 @@ private:
 		DzWeightMapPtr	m_blendWeights;
 	};
 
-	void		fbxPreRecurse( FbxNode* fbxNode );
+	void		fbxPreRecurse( FbxNode* fbxNode, QStringList &errorList );
 
 	DzTexture*	toTexture( FbxProperty fbxProperty );
 
@@ -194,7 +194,7 @@ private:
 class DzFbxImportFrame : public DzFileIOFrame {
 	Q_OBJECT
 public:
-	DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animChoices, const QString &errors );
+	DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animChoices, const QStringList &errors );
 	~DzFbxImportFrame();
 
 	//
