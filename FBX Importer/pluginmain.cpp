@@ -50,6 +50,7 @@ DZ_PLUGIN_VERSION( PLUGIN_MAJOR, PLUGIN_MINOR, PLUGIN_REV, PLUGIN_BUILD );
 **/
 DZ_PLUGIN_DESCRIPTION(
 	"Imports the Autodesk FBX format. "
+	"<p>Source code is available on <a href = \"https://github.com/daz3d/StudioFbxImporter\">Github</a>.</p>"
 	"<p>This software contains Autodesk&reg; FBX&reg; code developed by Autodesk, Inc. "
 	"Copyright 2013 Autodesk, Inc. All rights, reserved. Such code is provided \"as is\" "
 	"and Autodesk, Inc. disclaims any and all warranties, whether express or implied, including "
