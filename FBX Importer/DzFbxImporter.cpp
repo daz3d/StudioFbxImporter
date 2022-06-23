@@ -423,6 +423,11 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 	QString orgName;
 #if DZ_SDK_4_12_OR_GREATER
 	orgName = dzApp->getOrgName();
+#else
+	// DzApp::getOrgName() is not in the 4.5 SDK, so we attempt to use the
+	// meta-object to access the DzApp::orgName property - since 4.6.4.30.
+
+	orgName = dzApp->property( "orgName" ).toString();
 #endif
 	if ( !orgName.isEmpty()
 		&& orgName != QString( "DAZ 3D" ) )
@@ -528,6 +533,7 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 #else
 			// DzSkinBinding::getTargetVertexCount() is not in the 4.5 SDK, so
 			// we attempt to use the meta-object to call the method.
+
 			int targetVertexCount = 0;
 			if ( dsSkin
 				&& QMetaObject::invokeMethod( dsSkin,
@@ -653,9 +659,9 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 			);
 
 #else
-			// DzSkinBinding::setBindingMode(), DzSkinBinding::setScaleMode(), and DzSkinBinding::setGeneralMapMode()
-			// are not in the 4.5 SDK, so we attempt to use the meta-object to
-			// call these methods.
+			// DzSkinBinding::setBindingMode(), DzSkinBinding::setScaleMode(),
+			// and DzSkinBinding::setGeneralMapMode() are not in the 4.5 SDK,
+			// so we attempt to use the meta-object to call these methods.
 
 			QMetaObject::invokeMethod( dsSkin,
 				"setBindingMode", Q_ARG( int, 0 ) );
@@ -675,6 +681,10 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 				dsSkin->setBlendMap( m_skins[i].m_blendWeights );
 				dsSkin->setBlendMode( DzSkinBinding::BlendLinearDualQuat );
 #else
+				// DzSkinBinding::setBindingMode(), DzSkinBinding::setBlendMap(),
+				// and DzSkinBinding::setBlendMode() are not in the 4.5 SDK,
+				// so we attempt to use the meta-object to call these methods.
+
 				QMetaObject::invokeMethod( dsSkin,
 					"setBindingMode", Q_ARG( int, 2 ) );
 
@@ -953,6 +963,12 @@ static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
 	{
 #if DZ_SDK_4_12_OR_GREATER
 		presentation->setAutoFitBase( autoFitBase );
+#else
+		// DzPresentation::setAutoFitBase() is not in the 4.5 SDK, so we attempt
+		// to use the meta-object to access/set the DzPresentation::autoFitBase
+		// property - since 4.5.2.13.
+
+		presentation->setProperty( "autoFitBase", autoFitBase );
 #endif //DZ_SDK_4_12_OR_GREATER
 	}
 
@@ -960,6 +976,12 @@ static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
 	{
 #if DZ_SDK_4_12_OR_GREATER
 		presentation->setPreferredBase( preferredBase );
+#else
+		// DzPresentation::setPreferredBase() is not in the 4.5 SDK, so we attempt
+		// to use the meta-object to access/set the DzPresentation::preferredBase
+		// property - since 4.5.2.13.
+
+		presentation->setProperty( "preferredBase", preferredBase );
 #endif //DZ_SDK_4_12_OR_GREATER
 	}
 }
