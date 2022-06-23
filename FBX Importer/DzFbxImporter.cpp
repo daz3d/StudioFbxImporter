@@ -357,18 +357,18 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 		const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
 		const int numLayers = animStack->GetMemberCount<FbxAnimLayer>();
 
-		const char* stackName = animStack->GetName();
+		const QString stackName( animStack->GetName() );
 		QString error;
 		if ( numLayers == 0 )
 		{
-			errors += "Unexpected: " % QString( stackName ) % " has no layers.\n";
+			errors += "Unexpected: " % stackName % " has no layers.\n";
 		}
 		else if ( numLayers > 1 )
 		{
-			errors += "Animation Limitation: " % QString( stackName ) % " has multiple layers.\n";
+			errors += "Animation Limitation: " % stackName % " has multiple layers.\n";
 		}
 
-		animStackNames.push_back( QString( stackName ) );
+		animStackNames.push_back( stackName );
 	}
 
 
