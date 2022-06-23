@@ -196,41 +196,32 @@ int DzFbxImporter::getNumExtensions() const
 **/
 QString	DzFbxImporter::getExtension( int i ) const
 {
-	if ( i == 0 )
+	switch ( i )
 	{
+	case 0:
 		return "fbx";
-	}
-
-	if ( i == 1 )
-	{
+	case 1:
 		return "dxf";
-	}
-
-	if ( i == 2 )
-	{
+	case 2:
 		return "3ds";
-	}
-
-	if ( i == 3 )
-	{
+	case 3:
+		// DzCOLLADAImporter depends on FCollada (discontinued)
+		// DzCOLLADAImporter is deprecated
 		return "dae";
+	case 4:
+		// DzObjImporter provides a more suitable result
+		// This conflicts with DzObjImporter and recognize()
+		//return "obj";
+	default:
+		return QString();
 	}
-
-	/*
-	if ( i == 4 )
-	{
-		return "obj";
-	}
-	*/
-
-	return QString();
 }
 
 /**
 **/
 QString	DzFbxImporter::getDescription() const
 {
-	return "Autodesk FBX";
+	return "Autodesk FBX SDK";
 }
 
 /**
