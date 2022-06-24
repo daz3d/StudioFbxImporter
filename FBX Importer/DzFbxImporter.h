@@ -146,7 +146,9 @@ private:
 		DzWeightMapPtr	m_blendWeights;
 	};
 
-	void		fbxPreRecurse( FbxNode* fbxNode, QStringList &errorList );
+
+	void		fbxPreImport( QStringList &animStackNames, QStringList &errorList ) const;
+	void		fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorList ) const;
 
 	DzTexture*	toTexture( FbxProperty fbxProperty );
 
@@ -178,10 +180,6 @@ private:
 	QMap<FbxNode*, DzNode*>	m_nodeMap;
 	bool					m_needConversion;
 	DzTime					m_dsEndTime;
-	bool					m_rigErrorPre;
-	bool					m_rigErrorSkin;
-	bool					m_rigErrorScale;
-	bool					m_rigErrorRoot;
 	QDir					m_folder;
 	QVector<DzMaterial*>	m_dsMaterials;
 

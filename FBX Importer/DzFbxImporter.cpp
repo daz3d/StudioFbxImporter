@@ -154,10 +154,6 @@ DzFbxImporter::DzFbxImporter() :
 	m_fbxAnimLayer( NULL ),
 	m_needConversion( false ),
 	m_dsEndTime( 0 ),
-	m_rigErrorPre( false ),
-	m_rigErrorSkin( false ),
-	m_rigErrorScale( false ),
-	m_rigErrorRoot( false ),
 	m_suppressRigErrors( false ),
 	m_root( NULL )
 {
@@ -311,58 +307,11 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 		return true;
 	}
 
-	QStringList errorList;
-	for ( int i = 0; i < m_fbxScene->GetRootNode()->GetChildCount(); i++ )
-	{
-		fbxPreRecurse( m_fbxScene->GetRootNode()->GetChild( i ), errorList );
-	}
-
-	if ( !m_suppressRigErrors )
-	{
-		if ( m_rigErrorRoot )
-		{
-			errorList << "Rigging limitation: bone chain without skeleton root.";
-		}
-
-		if ( m_rigErrorSkin )
-		{
-			errorList << "Rigging limitation: cluster link references a non bone.";
-		}
-
-		if ( m_rigErrorPre )
-		{
-			errorList << "Rigging limitation: pre and post rotation must match in current implementation.";
-		}
-
-		if ( m_rigErrorScale )
-		{
-			errorList << "Transform differences: non-uniform scale detected. Results will likely be different.";
-		}
-	}
-
 	QStringList animStackNames;
-
-	for ( int i = 0, n = m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i < n; i++ )
-	{
-		const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
-		const int numLayers = animStack->GetMemberCount<FbxAnimLayer>();
-
-		const QString stackName( animStack->GetName() );
-
-		if ( numLayers == 0 )
-		{
-			errorList << "Unexpected: " % stackName % " has no layers.";
-		}
-		else if ( numLayers > 1 )
-		{
-			errorList << "Animation Limitation: " % stackName % " has multiple layers.";
-		}
-
-		animStackNames.push_back( stackName );
-	}
-
+	QStringList errorList;
 
 	DzFbxImporter* self = const_cast<DzFbxImporter*>( this );
+	fbxPreImport( animStackNames, errorList );
 	DzFbxImportFrame* frame = new DzFbxImportFrame( self, animStackNames, errorList );
 	if ( !frame )
 	{
@@ -1013,18 +962,50 @@ static bool _allClose( double a, double b, double c )
 
 /**
 **/
-void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode, QStringList &errorList )
+void DzFbxImporter::fbxPreImport( QStringList &animStackNames, QStringList &errorList ) const
 {
-	// pre/post-rotation must match
-	if ( fbxNode->GetPreRotation( FbxNode::eSourcePivot ) != fbxNode->GetPostRotation( FbxNode::eSourcePivot ) )
+	for ( int i = 0, n = m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i < n; i++ )
 	{
-		m_rigErrorPre = true;
+		const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
+		const int numLayers = animStack->GetMemberCount<FbxAnimLayer>();
+
+		const QString stackName( animStack->GetName() );
+
+		if ( numLayers == 0 )
+		{
+			errorList << "Animation: " % stackName % " has no layers.";
+		}
+		else if ( numLayers > 1 )
+		{
+			errorList << "Animation: " % stackName % " has multiple layers.";
+		}
+
+		animStackNames.push_back( stackName );
 	}
 
-	// scale must be uniform
-	if ( !_allClose( fbxNode->LclScaling.Get()[0], fbxNode->LclScaling.Get()[1], fbxNode->LclScaling.Get()[2] ) )
+	for ( int i = 0; i < m_fbxScene->GetRootNode()->GetChildCount(); i++ )
 	{
-		m_rigErrorScale = true;
+		fbxPreImportRecurse( m_fbxScene->GetRootNode()->GetChild( i ), errorList );
+	}
+}
+
+/**
+**/
+void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorList ) const
+{
+	if ( !m_suppressRigErrors )
+	{
+		// pre/post-rotation must match
+		if ( fbxNode->GetPreRotation( FbxNode::eSourcePivot ) != fbxNode->GetPostRotation( FbxNode::eSourcePivot ) )
+		{
+			errorList << "Rigging: Pre and post rotation mismatch for " % QString( fbxNode->GetName() );
+		}
+
+		// scale must be uniform
+		if ( !_allClose( fbxNode->LclScaling.Get()[0], fbxNode->LclScaling.Get()[1], fbxNode->LclScaling.Get()[2] ) )
+		{
+			errorList << "Rigging: Non-uniform scale detected for " % QString( fbxNode->GetName() );
+		}
 	}
 
 	// mesh
@@ -1041,39 +1022,45 @@ void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode, QStringList &errorList )
 				continue;
 			}
 
-			// skinning weights must be linked to a bone
-
-			FbxSkin* fbxSkin = static_cast< FbxSkin* >( deformer );
-			for ( int j = 0, m = fbxSkin->GetClusterCount(); j < m; j++ )
+			if ( !m_suppressRigErrors )
 			{
-				FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
-				if ( !fbxClusterNode || !fbxClusterNode->GetSkeleton() )
+				// skinning weights must be linked to a bone
+
+				FbxSkin* fbxSkin = static_cast< FbxSkin* >( deformer );
+				for ( int j = 0, m = fbxSkin->GetClusterCount(); j < m; j++ )
 				{
-					m_rigErrorSkin = true;
+					FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
+					if ( !fbxClusterNode || !fbxClusterNode->GetSkeleton() )
+					{
+						errorList << "Rigging: Cluster link references a non bone: " % QString( fbxClusterNode->GetName() );
+					}
 				}
 			}
 		}
 	}
 
-	// "bone chains"
-	if ( const FbxSkeleton* fbxSkeleton = fbxNode->GetSkeleton() )
+	if ( !m_suppressRigErrors )
 	{
-		// a "bone chain" must ultimately start with a "root"; if the 'current'
-		// skeleton node is not the root, it should have a parent that is
-
-		if ( fbxSkeleton->GetSkeletonType() != FbxSkeleton::eRoot )
+		// "bone chains"
+		if ( const FbxSkeleton* fbxSkeleton = fbxNode->GetSkeleton() )
 		{
-			FbxNode* fbxParentNode = fbxNode->GetParent();
-			if ( !fbxParentNode )
+			// a "bone chain" must ultimately start with a "root"; if the 'current'
+			// skeleton node is not the root, it should have a parent that is
+
+			if ( fbxSkeleton->GetSkeletonType() != FbxSkeleton::eRoot )
 			{
-				m_rigErrorRoot = true;
-			}
-			else
-			{
-				const FbxSkeleton* fbxParentSkeleton = fbxParentNode->GetSkeleton();
-				if ( !fbxParentSkeleton )
+				FbxNode* fbxParentNode = fbxNode->GetParent();
+				if ( !fbxParentNode )
 				{
-					m_rigErrorRoot = true;
+					errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
+				}
+				else
+				{
+					const FbxSkeleton* fbxParentSkeleton = fbxParentNode->GetSkeleton();
+					if ( !fbxParentSkeleton )
+					{
+						errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
+					}
 				}
 			}
 		}
@@ -1081,7 +1068,7 @@ void DzFbxImporter::fbxPreRecurse( FbxNode* fbxNode, QStringList &errorList )
 
 	for ( int i = 0; i < fbxNode->GetChildCount(); i++ )
 	{
-		fbxPreRecurse( fbxNode->GetChild( i ), errorList );
+		fbxPreImportRecurse( fbxNode->GetChild( i ), errorList );
 	}
 }
 
