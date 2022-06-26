@@ -148,6 +148,7 @@ public:
 	Default Constructor.
 **/
 DzFbxImporter::DzFbxImporter() :
+	m_fbxRead( false ),
 	m_fbxManager( NULL ),
 	m_fbxScene( NULL ),
 	m_fbxAnimStack( NULL ),
@@ -307,26 +308,26 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 		return true;
 	}
 
+	fbxRead( filename );
+
 	QStringList animStackNames;
 	QStringList errorList;
+	fbxPreImport( animStackNames, errorList );
 
 	DzFbxImporter* self = const_cast<DzFbxImporter*>( this );
-	fbxPreImport( animStackNames, errorList );
 	DzFbxImportFrame* frame = new DzFbxImportFrame( self, animStackNames, errorList );
 	if ( !frame )
 	{
+		fbxCleanup();
 		return true;
 	}
 
 	DzFileIODlg optionsDlg( frame );
 	frame->setOptions( impOptions, filename );
-
-	if ( animStackNames.size() > 1 || errorList.size() )
+	if ( optionsDlg.exec() != QDialog::Accepted )
 	{
-		if ( optionsDlg.exec() != QDialog::Accepted )
-		{
-			return false; // user cancelled
-		}
+		fbxCleanup();
+		return false; // user cancelled
 	}
 
 #if DZ_SDK_4_12_OR_GREATER
@@ -343,21 +344,13 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 }
 
 /**
-	@param filename		The full path of the file to import.
-	@param impOptions	The options to use while importing the file.
-
-	@return	DZ_NO_ERROR if the file was successfully imported.
 **/
-DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* impOptions )
+void DzFbxImporter::fbxRead( const QString &filename )
 {
-#if DZ_SDK_4_12_OR_GREATER
-	clearImportedNodes();
-#endif
-
-	DzProgress progress( "Importing" );
-
-	m_folder = filename;
-	m_folder.cdUp();
+	if ( m_fbxRead )
+	{
+		return;
+	}
 
 	QString orgName;
 #if DZ_SDK_4_12_OR_GREATER
@@ -377,22 +370,31 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 	m_fbxManager = FbxManager::Create();
 	FbxIOSettings* fbxIoSettings = FbxIOSettings::Create( m_fbxManager, IOSROOT );
 	m_fbxManager->SetIOSettings( fbxIoSettings );
+
 	m_fbxScene = FbxScene::Create( m_fbxManager, "" );
-	m_fbxAnimStack = 0;
-	m_fbxAnimLayer = 0;
+
+	m_fbxAnimStack = NULL;
+	m_fbxAnimLayer = NULL;
 	m_dsEndTime = dzScene->getAnimRange().getEnd();
 
 	FbxImporter* fbxImporter = FbxImporter::Create( m_fbxManager, "" );
-	fbxImporter->Initialize( filename.toLatin1().data(), -1, fbxIoSettings );
+	if ( !fbxImporter->Initialize( filename.toUtf8().data(), -1, fbxIoSettings ) )
+	{
+		const FbxStatus status = fbxImporter->GetStatus();
+		if ( status != FbxStatus::eSuccess )
+		{
+			dzApp->warning( QString( "FBX Importer: %1" ).arg( status.GetErrorString() ) );
+		}
+	}
 
 	if ( fbxImporter->IsFBX() )
 	{
-		fbxIoSettings->SetBoolProp( IMP_FBX_MATERIAL,        true );
-		fbxIoSettings->SetBoolProp( IMP_FBX_TEXTURE,         true );
-		fbxIoSettings->SetBoolProp( IMP_FBX_LINK,            true );
-		fbxIoSettings->SetBoolProp( IMP_FBX_SHAPE,           true );
-		fbxIoSettings->SetBoolProp( IMP_FBX_GOBO,            true );
-		fbxIoSettings->SetBoolProp( IMP_FBX_ANIMATION,       true );
+		fbxIoSettings->SetBoolProp( IMP_FBX_MATERIAL, true );
+		fbxIoSettings->SetBoolProp( IMP_FBX_TEXTURE, true );
+		fbxIoSettings->SetBoolProp( IMP_FBX_LINK, true );
+		fbxIoSettings->SetBoolProp( IMP_FBX_SHAPE, true );
+		fbxIoSettings->SetBoolProp( IMP_FBX_GOBO, true );
+		fbxIoSettings->SetBoolProp( IMP_FBX_ANIMATION, true );
 		fbxIoSettings->SetBoolProp( IMP_FBX_GLOBAL_SETTINGS, true );
 	}
 
@@ -402,11 +404,12 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 
 	fbxImporter->Import( m_fbxScene );
 
-	if ( fbxImporter->GetStatus() != FbxStatus::eSuccess )
+	FbxStatus status = fbxImporter->GetStatus();
+	if ( status != FbxStatus::eSuccess )
 	{
 #if FBXSDK_VERSION_MAJOR >= 2020
 		FbxArray<FbxString*> history;
-		fbxImporter->GetStatus().GetErrorStringHistory( history );
+		status.GetErrorStringHistory( history );
 		if ( history.GetCount() > 1 )
 		{
 			// error strings are in stack order (last error -> first element)
@@ -417,31 +420,26 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 		}
 		FbxArrayDelete<FbxString*>( history );
 #else
-		dzApp->warning( QString( "FBX Importer: %1" ).arg( fbxImporter->GetStatus().GetErrorString() ) );
+		dzApp->warning( QString( "FBX Importer: %1" ).arg( status.GetErrorString() ) );
 #endif
 	}
 
 	fbxImporter->Destroy();
 
-	QScopedPointer<DzFileIOSettings> options( new DzFileIOSettings() );
-	const int isOK = getOptions( options.data(), impOptions, filename );
-	if ( !isOK )
-	{
-		return DZ_USER_CANCELLED_OPERATION;
-	}
+	m_fbxRead = true;
+}
 
-	const QString takeName = options->getStringValue( c_optionTake );
-
-	m_fbxAnimStack = NULL;
-	m_fbxAnimLayer = NULL;
-
-	if ( !takeName.isEmpty() )
+/**
+**/
+void DzFbxImporter::fbxImport()
+{
+	if ( !m_takeName.isEmpty() )
 	{
 		const QString idxPrefix( "idx::" );
-		if ( takeName.startsWith( idxPrefix ) )
+		if ( m_takeName.startsWith( idxPrefix ) )
 		{
 			bool isNum = false;
-			const int takeIdx = takeName.mid( idxPrefix.length() ).toInt( &isNum );
+			const int takeIdx = m_takeName.mid( idxPrefix.length() ).toInt( &isNum );
 			if ( isNum && takeIdx > -1 && takeIdx < m_fbxScene->GetSrcObjectCount<FbxAnimStack>() )
 			{
 				m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( takeIdx );
@@ -458,7 +456,7 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 			for ( int i = 0; i < m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i++ )
 			{
 				const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
-				if ( QString( animStack->GetName() ) == takeName )
+				if ( QString( animStack->GetName() ) == m_takeName )
 				{
 					m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
 
@@ -666,9 +664,47 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 		dzScene->setAnimRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
 		dzScene->setPlayRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
 	}
-	m_fbxManager->Destroy();
-	m_fbxManager = 0;
+}
 
+/**
+**/
+void DzFbxImporter::fbxCleanup()
+{
+	if ( m_fbxManager )
+	{
+		m_fbxManager->Destroy();
+	}
+
+	m_fbxManager = NULL;
+}
+
+/**
+	@param filename		The full path of the file to import.
+	@param impOptions	The options to use while importing the file.
+
+	@return	DZ_NO_ERROR if the file was successfully imported.
+**/
+DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* impOptions )
+{
+	DzFileIOSettings options;
+	const int isOK = getOptions( &options, impOptions, filename );
+	if ( !isOK )
+	{
+		return DZ_USER_CANCELLED_OPERATION;
+	}
+
+	m_takeName = impOptions->getStringValue( c_optionTake, QString() );
+
+#if DZ_SDK_4_12_OR_GREATER
+	clearImportedNodes();
+#endif
+
+	m_folder = filename;
+	m_folder.cdUp();
+
+	fbxRead( filename );
+	fbxImport();
+	fbxCleanup();
 
 	bool allTransparent = true;
 	for ( int i = 0; i < m_dsMaterials.size() && allTransparent; i++ )

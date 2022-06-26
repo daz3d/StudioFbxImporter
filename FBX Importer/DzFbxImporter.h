@@ -172,18 +172,29 @@ private:
 
 	void		replicateSkeleton( DzSkeleton* crossSkeleton, Skinning &skinning );
 
+	void		fbxRead( const QString &filename );
+	void		fbxImport();
+	void		fbxCleanup();
+
+
+	bool				m_fbxRead;
 	FbxManager*				m_fbxManager;
 	FbxScene*				m_fbxScene;
 	FbxAnimStack*			m_fbxAnimStack;
 	FbxAnimLayer*			m_fbxAnimLayer;
+
 	QVector<Skinning>		m_skins;
 	QMap<FbxNode*, DzNode*>	m_nodeMap;
 	bool					m_needConversion;
 	DzTime					m_dsEndTime;
-	QDir					m_folder;
-	QVector<DzMaterial*>	m_dsMaterials;
 
 	bool					m_suppressRigErrors;
+
+	QDir					m_folder;
+
+	QVector<DzMaterial*>	m_dsMaterials;
+
+	QString					m_takeName;
 
 	Node*		m_root;
 };
