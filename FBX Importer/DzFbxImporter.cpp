@@ -301,8 +301,10 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 		// DzFileIO::copySettings() is not in the 4.5 SDK, so we attempt
 		// to use the meta-object to call the method.
 
-		QMetaObject::invokeMethod( this,
-			"copySettings", Q_ARG( DzFileIOSettings*, options ), Q_ARG( const DzFileIOSettings*, impOptions ) );
+		bool im = QMetaObject::invokeMethod( this, "copySettings",
+			Q_ARG( DzFileIOSettings*, options ),
+			Q_ARG( const DzFileIOSettings*, impOptions ) );
+		assert( im );
 #endif
 
 		return true;
@@ -498,15 +500,16 @@ void DzFbxImporter::fbxImport()
 
 			int targetVertexCount = 0;
 			if ( dsSkin
-				&& QMetaObject::invokeMethod( dsSkin,
-				"getTargetVertexCount", Q_RETURN_ARG( int, targetVertexCount ) )
+				&& QMetaObject::invokeMethod( dsSkin, "getTargetVertexCount",
+					Q_RETURN_ARG( int, targetVertexCount ) )
 				&& targetVertexCount < 1 )
 			{
 				// DzSkinBinding::setTargetVertexCount() is not in the 4.5 SDK,
 				// so we attempt to use the meta-object to call the method.
 
-				QMetaObject::invokeMethod( dsSkin,
-					"setTargetVertexCount", Q_ARG( int, numVertices ) );
+				bool im = QMetaObject::invokeMethod( dsSkin, "setTargetVertexCount",
+					Q_ARG( int, numVertices ) );
+				assert( im );
 #endif
 			}
 			else if ( !dsSkin )
@@ -625,15 +628,17 @@ void DzFbxImporter::fbxImport()
 			// and DzSkinBinding::setGeneralMapMode() are not in the 4.5 SDK,
 			// so we attempt to use the meta-object to call these methods.
 
-			QMetaObject::invokeMethod( dsSkin,
-				"setBindingMode", Q_ARG( int, 0 ) );
+			bool im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
+				Q_ARG( int, 0 ) );
+			assert( im );
 
-			QMetaObject::invokeMethod( dsSkin,
-				"setScaleMode", Q_ARG( int, 1 ) );
+			im = QMetaObject::invokeMethod( dsSkin, "setScaleMode",
+				Q_ARG( int, 1 ) );
+			assert( im );
 
-			QMetaObject::invokeMethod( dsSkin,
-				"setGeneralMapMode",
+			im = QMetaObject::invokeMethod( dsSkin, "setGeneralMapMode",
 				Q_ARG( int, fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ? 1 : 0 ) );
+			assert( im );
 #endif
 
 			if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && m_skins[i].m_blendWeights )
@@ -647,14 +652,17 @@ void DzFbxImporter::fbxImport()
 				// and DzSkinBinding::setBlendMode() are not in the 4.5 SDK,
 				// so we attempt to use the meta-object to call these methods.
 
-				QMetaObject::invokeMethod( dsSkin,
-					"setBindingMode", Q_ARG( int, 2 ) );
+				im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
+					Q_ARG( int, 2 ) );
+				assert( im );
 
-				QMetaObject::invokeMethod( dsSkin,
-					"setBlendMap", Q_ARG( DzWeightMap*, m_skins[i].m_blendWeights.operator->() ) );
+				im = QMetaObject::invokeMethod( dsSkin, "setBlendMap",
+					Q_ARG( DzWeightMap*, m_skins[i].m_blendWeights.operator->() ) );
+				assert( im );
 
-				QMetaObject::invokeMethod( dsSkin,
-					"setBlendMode", Q_ARG( int, 1 ) );
+				im = QMetaObject::invokeMethod( dsSkin, "setBlendMode",
+					Q_ARG( int, 1 ) );
+				assert( im );
 #endif
 			}
 		}
@@ -1544,7 +1552,7 @@ void DzFbxImporter::fbxImportSubdVertexWeights( FbxMesh* fbxMesh, DzFacetMesh* d
 
 				bool im = QMetaObject::invokeMethod( dsMesh, "setVertexWeight",
 					Q_ARG( int, j ), Q_ARG( int, weight ) );
-				Q_UNUSED( im )
+				assert( im );
 #endif
 			}
 		}
@@ -1951,7 +1959,7 @@ void DzFbxImporter::fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool 
 
 				bool im = QMetaObject::invokeMethod( dsMesh, "addFacet",
 					Q_ARG( const DzFacet &, face ) );
-				Q_UNUSED( im )
+				assert( im );
 #endif
 
 				if ( isRoot )
@@ -1963,7 +1971,7 @@ void DzFbxImporter::fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool 
 					// we attempt to use the meta-object to call the method.
 
 					bool im = QMetaObject::invokeMethod( dsMesh, "incrementNgons" );
-					Q_UNUSED( im )
+					assert( im );
 #endif
 				}
 			}
@@ -2013,7 +2021,7 @@ void DzFbxImporter::fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsM
 
 				bool im = QMetaObject::invokeMethod( dsMesh, "setEdgeWeight",
 					Q_ARG( int, edgeVertA ), Q_ARG( int, edgeVertB ), Q_ARG( int, weight ) );
-				Q_UNUSED( im )
+				assert( im );
 #endif
 			}
 		}
