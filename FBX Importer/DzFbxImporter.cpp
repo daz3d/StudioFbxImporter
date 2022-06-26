@@ -2254,10 +2254,10 @@ const char* c_none = QT_TRANSLATE_NOOP( "DzFbxImportFrame", "<None>" );
 
 /**
 **/
-DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animChoices, const QStringList &errors ) :
+DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animStackNames, const QStringList &errorList ) :
 	DzFileIOFrame( tr( "FBX Import Options" ) ), m_data( new Data( importer ) )
 {
-	const QString name = "FbxImport";
+	const QString name( "FbxImport" );
 
 	const int margin = style()->pixelMetric( DZ_PM_GeneralMargin );
 	const int btnHeight = style()->pixelMetric( DZ_PM_ButtonHeight );
@@ -2279,15 +2279,15 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 	animLyt->setMargin( 0 );
 	animLyt->setSpacing( margin );
 
-	QLabel* animTakelbl = new QLabel( tr( "Take:" ) );
-	animTakelbl->setObjectName( name % "TakeLbl" );
-	animLyt->addWidget( animTakelbl );
+	QLabel* animTakeLbl = new QLabel( tr( "Take:" ) );
+	animTakeLbl->setObjectName( name % "TakeLbl" );
+	animLyt->addWidget( animTakeLbl );
 
 	m_data->m_animTakeCmb = new QComboBox();
 	m_data->m_animTakeCmb->setObjectName( name % "TakeToImportCmb" );
 	m_data->m_animTakeCmb->addItem( tr( c_none ) );
 	//m_data->m_animTakeCmb->insertSeparator(m_data->m_animTakeCmb->count() );
-	m_data->m_animTakeCmb->addItems( animChoices );
+	m_data->m_animTakeCmb->addItems( animStackNames );
 	m_data->m_animTakeCmb->setCurrentIndex( 0 );
 	m_data->m_animTakeCmb->setFixedHeight( btnHeight );
 	animLyt->addWidget( m_data->m_animTakeCmb, 1 );
@@ -2298,39 +2298,43 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 
 	mainLyt->addWidget( importOptsGBox );
 
-	// Footer
-	QGroupBox* reportGrp = new QGroupBox();
-	reportGrp->setObjectName( name % "PreImportReportGBox" );
-	reportGrp->setTitle( tr( "Pre-Import Report :" ) );
+	if( !errorList.isEmpty() )
+	{
+		// Footer
+		QGroupBox* reportGrp = new QGroupBox();
+		reportGrp->setObjectName( name % "PreImportReportGBox" );
+		reportGrp->setTitle( tr( "Pre-Import Report :" ) );
 
-	QBoxLayout* reportLyt = new QVBoxLayout();
-	reportLyt->setSpacing( margin );
-	reportLyt->setMargin( margin );
+		QBoxLayout* reportLyt = new QVBoxLayout();
+		reportLyt->setSpacing( margin );
+		reportLyt->setMargin( margin );
 
-	QWidget* preImportWgt = new QWidget();
-	preImportWgt->setObjectName( name % "PreImportReportWgt" );
+		QWidget* preImportWgt = new QWidget();
+		preImportWgt->setObjectName( name % "PreImportReportWgt" );
 
-	QLabel* preImportLbl = new QLabel();
-	preImportLbl->setObjectName( name % "PreImportReportLbl" );
-	preImportLbl->setText( errors.join( "\n" ) );
+		QLabel* preImportLbl = new QLabel();
+		preImportLbl->setObjectName( name % "PreImportReportLbl" );
+		preImportLbl->setText( errorList.join( "\n" ) );
+		preImportLbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
 
-	QBoxLayout* preImportLyt = new QVBoxLayout();
-	preImportLyt->setSpacing( margin );
-	preImportLyt->setMargin( margin );
-	preImportLyt->addWidget( preImportLbl );
-	preImportLyt->addStretch();
-	preImportWgt->setLayout( preImportLyt );
+		QBoxLayout* preImportLyt = new QVBoxLayout();
+		preImportLyt->setSpacing( margin );
+		preImportLyt->setMargin( margin );
+		preImportLyt->addWidget( preImportLbl );
+		preImportLyt->addStretch();
+		preImportWgt->setLayout( preImportLyt );
 
-	QScrollArea* preImportScroll = new QScrollArea();
-	preImportScroll->setObjectName( name % "PreImportReportScrollArea" );
-	preImportScroll->setWidgetResizable( true );
-	preImportScroll->setWidget( preImportWgt );
+		QScrollArea* preImportScroll = new QScrollArea();
+		preImportScroll->setObjectName( name % "PreImportReportScrollArea" );
+		preImportScroll->setWidgetResizable( true );
+		preImportScroll->setWidget( preImportWgt );
 
-	reportLyt->addWidget( preImportScroll );
+		reportLyt->addWidget( preImportScroll );
 
-	reportGrp->setLayout( reportLyt );
+		reportGrp->setLayout( reportLyt );
 
-	mainLyt->addWidget( reportGrp );
+		mainLyt->addWidget( reportGrp );
+	}
 
 	setLayout( mainLyt );
 

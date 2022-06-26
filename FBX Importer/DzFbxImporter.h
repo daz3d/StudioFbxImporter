@@ -192,7 +192,7 @@ private:
 class DzFbxImportFrame : public DzFileIOFrame {
 	Q_OBJECT
 public:
-	DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animChoices, const QStringList &errors );
+	DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animStackNames, const QStringList &errorList );
 	~DzFbxImportFrame();
 
 	//
