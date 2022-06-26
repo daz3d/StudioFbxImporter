@@ -13,6 +13,14 @@
 	See the License for the specific language governing permissions and
 	limitations under the License.
 **********************************************************************/
+#include "dzversion.h"
+
+#if ((DZ_SDK_VERSION_MAJOR >= 5) || ((DZ_SDK_VERSION_MAJOR == 4) && (DZ_SDK_VERSION_MINOR >= 12)))
+#define DZ_SDK_4_12_OR_GREATER 1
+#else
+#define DZ_SDK_4_12_OR_GREATER 0
+#endif
+
 /*****************************
 	Include files
 *****************************/
@@ -37,6 +45,9 @@
 #include "dzfigure.h"
 #include "dzfileiosettings.h"
 #include "dzfloatproperty.h"
+#if DZ_SDK_4_12_OR_GREATER
+#include "dzgraftingfigureshape.h"
+#endif // DZ_SDK_4_12_OR_GREATER
 #include "dzimagemgr.h"
 #include "dzmorph.h"
 #include "dzmorphdeltas.h"
@@ -48,7 +59,6 @@
 #include "dzsettings.h"
 #include "dzskinbinding.h"
 #include "dzstyle.h"
-#include "dzversion.h"
 
 // Project Specific
 
@@ -59,12 +69,6 @@
 #if FBXSDK_VERSION_MAJOR >= 2016
 #define DATA_FBX_USER_PROPERTIES "FbxUserProperties"
 #define DATA_LOD_INFO "LODInfo"
-#endif
-
-#if ((DZ_SDK_VERSION_MAJOR >= 5) || ((DZ_SDK_VERSION_MAJOR == 4) && (DZ_SDK_VERSION_MINOR >= 12)))
-#define DZ_SDK_4_12_OR_GREATER 1
-#else
-#define DZ_SDK_4_12_OR_GREATER 0
 #endif
 
 namespace
@@ -2190,7 +2194,23 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	DzFacetMesh* dsMesh = new DzFacetMesh();
 	dsMesh->setName( !dsName.isEmpty() ? dsName : "geometry" );
 
-	DzFacetShape* dsShape = new DzFacetShape();
+#if DZ_SDK_4_12_OR_GREATER
+	DzFacetShape* dsShape = new DzGraftingFigureShape();
+#else
+	// DzGraftingFigureShape is not in the 4.5 SDK, but if the version of the
+	// application has the factory for the class we can use it to create an
+	// instance or fallback to the base class that is in the 4.5 SDK
+
+	DzFacetShape* dsShape;
+	if ( const DzClassFactory* factory = dzApp->findClassFactory( "DzGraftingFigureShape" ) )
+	{
+		dsShape = qobject_cast<DzFacetShape*>( factory->createInstance() );
+	}
+	else
+	{
+		dsShape = new DzFacetShape();
+	}
+#endif
 	dsShape->setName( !dsName.isEmpty() ? dsName : "shape" );
 
 	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsMeshNode );
