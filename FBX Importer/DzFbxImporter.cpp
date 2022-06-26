@@ -2137,9 +2137,18 @@ void DzFbxImporter::fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObje
 void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode )
 {
 	FbxMesh* fbxMesh = fbxNode->GetMesh();
+
+	const QString dsName = dsMeshNode->getName();
+
 	DzObject* dsObject = new DzObject();
+	dsObject->setName( dsName );
+
 	DzFacetMesh* dsMesh = new DzFacetMesh();
+	dsMesh->setName( dsName );
+
 	DzFacetShape* dsShape = new DzFacetShape();
+	dsShape->setName( dsName );
+
 	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsMeshNode );
 
 	DzVec3 offset( 0, 0, 0 );
