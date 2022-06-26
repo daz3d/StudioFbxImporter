@@ -2182,16 +2182,16 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 {
 	FbxMesh* fbxMesh = fbxNode->GetMesh();
 
-	const QString dsName = dsMeshNode->getName();
+	const QString dsName = dsMeshNode ? dsMeshNode->getName() : fbxNode->GetName();
 
 	DzObject* dsObject = new DzObject();
-	dsObject->setName( dsName );
+	dsObject->setName( !dsName.isEmpty() ? dsName : "object" );
 
 	DzFacetMesh* dsMesh = new DzFacetMesh();
-	dsMesh->setName( dsName );
+	dsMesh->setName( !dsName.isEmpty() ? dsName : "geometry" );
 
 	DzFacetShape* dsShape = new DzFacetShape();
-	dsShape->setName( dsName );
+	dsShape->setName( !dsName.isEmpty() ? dsName : "shape" );
 
 	DzFigure* dsFigure = qobject_cast<DzFigure*>( dsMeshNode );
 
