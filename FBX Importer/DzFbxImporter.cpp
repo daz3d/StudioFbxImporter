@@ -157,12 +157,14 @@ DzFbxImporter::DzFbxImporter() :
 	m_fbxScene( NULL ),
 	m_fbxAnimStack( NULL ),
 	m_fbxAnimLayer( NULL ),
+	m_fbxFileMajor( 0 ),
+	m_fbxFileMinor( 0 ),
+	m_fbxFileRevision( 0 ),
 	m_needConversion( false ),
 	m_dsEndTime( 0 ),
 	m_suppressRigErrors( false ),
 	m_root( NULL )
-{
-}
+{}
 
 /**
 **/
@@ -315,13 +317,10 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 	}
 
 	fbxRead( filename );
-
-	QStringList animStackNames;
-	QStringList errorList;
-	fbxPreImport( animStackNames, errorList );
+	fbxPreImport();
 
 	DzFbxImporter* self = const_cast<DzFbxImporter*>( this );
-	DzFbxImportFrame* frame = new DzFbxImportFrame( self, animStackNames, errorList );
+	DzFbxImportFrame* frame = new DzFbxImportFrame( self );
 	if ( !frame )
 	{
 		fbxCleanup();
@@ -393,6 +392,8 @@ void DzFbxImporter::fbxRead( const QString &filename )
 		}
 	}
 
+	fbxImporter->GetFileVersion( m_fbxFileMajor, m_fbxFileMinor, m_fbxFileRevision );
+
 	if ( fbxImporter->IsFBX() )
 	{
 		fbxIoSettings->SetBoolProp( IMP_FBX_MATERIAL, true );
@@ -431,6 +432,12 @@ void DzFbxImporter::fbxRead( const QString &filename )
 	}
 
 	fbxImporter->Destroy();
+
+	const FbxDocumentInfo* fbxSceneInfo = m_fbxScene->GetSceneInfo();
+	m_fbxFileAuthor = fbxSceneInfo->mAuthor;
+	m_fbxOrigAppVendor = fbxSceneInfo->Original_ApplicationVendor;
+	m_fbxOrigAppName = fbxSceneInfo->Original_ApplicationName;
+	m_fbxOrigAppVersion = fbxSceneInfo->Original_ApplicationVersion;
 
 	m_fbxRead = true;
 }
@@ -740,6 +747,102 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 
 /**
 **/
+QString DzFbxImporter::getFileVersion() const
+{
+	QString sdkStr( "Unknown" );
+	const QString versionStr( "%1 (%2.%3.%4)" );
+	switch ( m_fbxFileMajor )
+	{
+	case 7:
+		switch( m_fbxFileMinor )
+		{
+		case 7:
+			sdkStr = "FBX 2019";
+			break;
+		case 5:
+			sdkStr = "FBX 2016/2017";
+			break;
+		case 4:
+			sdkStr = "FBX 2014/2015";
+			break;
+		case 3:
+			sdkStr = "FBX 2013";
+			break;
+		case 2:
+			sdkStr = "FBX 2012";
+			break;
+		case 1:
+			sdkStr = "FBX 2011";
+			break;
+		default:
+			break;
+		}
+		break;
+	case 6:
+		switch( m_fbxFileMinor )
+		{
+		case 1:
+			sdkStr = "FBX 2006/2009/2010";
+			break;
+		default:
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return versionStr
+		.arg( sdkStr )
+		.arg( m_fbxFileMajor )
+		.arg( m_fbxFileMinor )
+		.arg( m_fbxFileRevision );
+}
+
+/**
+**/
+QString DzFbxImporter::getFileAuthor() const
+{
+	return QString( m_fbxFileAuthor );
+}
+
+/**
+**/
+QString DzFbxImporter::getOriginalAppVendor() const
+{
+	return QString( m_fbxOrigAppVendor );
+}
+
+/**
+**/
+QString DzFbxImporter::getOriginalAppName() const
+{
+	return QString( m_fbxOrigAppName );
+}
+
+/**
+**/
+QString DzFbxImporter::getOriginalAppVersion() const
+{
+	return QString( m_fbxOrigAppVersion );
+}
+
+/**
+**/
+QStringList DzFbxImporter::getAnimStackNames() const
+{
+	return m_animStackNames;
+}
+
+/**
+**/
+QStringList DzFbxImporter::getErrorList() const
+{
+	return m_errorList;
+}
+
+/**
+**/
 void DzFbxImporter::replicateSkeleton( DzSkeleton* crossSkeleton, Skinning &skinning )
 {
 	Node* node = skinning.node;
@@ -1010,7 +1113,7 @@ static bool _allClose( double a, double b, double c )
 
 /**
 **/
-void DzFbxImporter::fbxPreImport( QStringList &animStackNames, QStringList &errorList ) const
+void DzFbxImporter::fbxPreImport()
 {
 	for ( int i = 0, n = m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i < n; i++ )
 	{
@@ -1021,38 +1124,38 @@ void DzFbxImporter::fbxPreImport( QStringList &animStackNames, QStringList &erro
 
 		if ( numLayers == 0 )
 		{
-			errorList << "Animation: " % stackName % " has no layers.";
+			m_errorList << "Animation: " % stackName % " has no layers.";
 		}
 		else if ( numLayers > 1 )
 		{
-			errorList << "Animation: " % stackName % " has multiple layers.";
+			m_errorList << "Animation: " % stackName % " has multiple layers.";
 		}
 
-		animStackNames.push_back( stackName );
+		m_animStackNames.push_back( stackName );
 	}
 
 	for ( int i = 0; i < m_fbxScene->GetRootNode()->GetChildCount(); i++ )
 	{
-		fbxPreImportRecurse( m_fbxScene->GetRootNode()->GetChild( i ), errorList );
+		fbxPreImportRecurse( m_fbxScene->GetRootNode()->GetChild( i ) );
 	}
 }
 
 /**
 **/
-void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorList ) const
+void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode )
 {
 	if ( !m_suppressRigErrors )
 	{
 		// pre/post-rotation must match
 		if ( fbxNode->GetPreRotation( FbxNode::eSourcePivot ) != fbxNode->GetPostRotation( FbxNode::eSourcePivot ) )
 		{
-			errorList << "Rigging: Pre and post rotation mismatch for " % QString( fbxNode->GetName() );
+			m_errorList << "Rigging: Pre and post rotation mismatch for " % QString( fbxNode->GetName() );
 		}
 
 		// scale must be uniform
 		if ( !_allClose( fbxNode->LclScaling.Get()[0], fbxNode->LclScaling.Get()[1], fbxNode->LclScaling.Get()[2] ) )
 		{
-			errorList << "Rigging: Non-uniform scale detected for " % QString( fbxNode->GetName() );
+			m_errorList << "Rigging: Non-uniform scale detected for " % QString( fbxNode->GetName() );
 		}
 	}
 
@@ -1080,7 +1183,7 @@ void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorLis
 					FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
 					if ( !fbxClusterNode || !fbxClusterNode->GetSkeleton() )
 					{
-						errorList << "Rigging: Cluster link references a non bone: " % QString( fbxClusterNode->GetName() );
+						m_errorList << "Rigging: Cluster link references a non bone: " % QString( fbxClusterNode->GetName() );
 					}
 				}
 			}
@@ -1100,14 +1203,14 @@ void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorLis
 				FbxNode* fbxParentNode = fbxNode->GetParent();
 				if ( !fbxParentNode )
 				{
-					errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
+					m_errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
 				}
 				else
 				{
 					const FbxSkeleton* fbxParentSkeleton = fbxParentNode->GetSkeleton();
 					if ( !fbxParentSkeleton )
 					{
-						errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
+						m_errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
 					}
 				}
 			}
@@ -1116,7 +1219,7 @@ void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorLis
 
 	for ( int i = 0; i < fbxNode->GetChildCount(); i++ )
 	{
-		fbxPreImportRecurse( fbxNode->GetChild( i ), errorList );
+		fbxPreImportRecurse( fbxNode->GetChild( i ) );
 	}
 }
 
@@ -2318,7 +2421,7 @@ const char* c_none = QT_TRANSLATE_NOOP( "DzFbxImportFrame", "<None>" );
 
 /**
 **/
-DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animStackNames, const QStringList &errorList ) :
+DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	DzFileIOFrame( tr( "FBX Import Options" ) ), m_data( new Data( importer ) )
 {
 	const QString name( "FbxImport" );
@@ -2329,6 +2432,83 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 	QVBoxLayout* mainLyt = new QVBoxLayout();
 	mainLyt->setSpacing( margin );
 	mainLyt->setMargin( margin );
+
+	// File Info
+	QGroupBox* fileInfoGBox = new QGroupBox();
+	fileInfoGBox->setObjectName( name % "InfoGBox" );
+	fileInfoGBox->setTitle( tr( "File Info :" ) );
+
+	QGridLayout* fileInfoLyt = new QGridLayout();
+	fileInfoLyt->setSpacing( margin );
+	fileInfoLyt->setMargin( margin );
+	fileInfoLyt->setColumnStretch( 1, 1 );
+
+	int row = 0;
+
+	QLabel* lbl;
+
+	const QString fileAuthor = importer->getFileAuthor();
+	if ( !fileAuthor.isEmpty() )
+	{
+		lbl = new QLabel(tr("Author:"));
+		lbl->setObjectName( name % "FileAuthorLbl" );
+		lbl->setAlignment( Qt::AlignRight );
+		fileInfoLyt->addWidget( lbl, row, 0 );
+
+		lbl = new QLabel( fileAuthor );
+		lbl->setObjectName( name % "FileAuthorValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		fileInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString fileVersion = importer->getFileVersion();
+	if ( fileVersion != "Unknown (0.0.0)" )
+	{
+		lbl = new QLabel( tr( "Version:" ) );
+		lbl->setObjectName( name % "FileVersionLbl" );
+		lbl->setAlignment( Qt::AlignRight );
+		fileInfoLyt->addWidget( lbl, row, 0 );
+
+		lbl = new QLabel( fileVersion );
+		lbl->setObjectName( name % "FileVersionValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		fileInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString vendor = importer->getOriginalAppVendor();
+	if ( !vendor.simplified().isEmpty() )
+	{
+		lbl = new QLabel( tr( "Vendor:" ) );
+		lbl->setObjectName( name % "VendorLbl" );
+		lbl->setAlignment( Qt::AlignRight );
+		fileInfoLyt->addWidget( lbl, row, 0 );
+
+		lbl = new QLabel( vendor );
+		lbl->setObjectName( name % "VendorValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		fileInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString application = QString( "%1 %2" )
+					.arg( importer->getOriginalAppName() )
+					.arg( importer->getOriginalAppVersion() );
+	if ( !application.simplified().isEmpty() )
+	{
+		lbl = new QLabel( tr( "Application:" ) );
+		lbl->setObjectName( name % "ApplicationLbl" );
+		lbl->setAlignment( Qt::AlignRight );
+		fileInfoLyt->addWidget( lbl, row, 0 );
+
+		lbl = new QLabel( application );
+		lbl->setObjectName( name % "ApplicationValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		fileInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	fileInfoGBox->setLayout( fileInfoLyt );
+
+	mainLyt->addWidget( fileInfoGBox );
+
 
 	// Import
 	QGroupBox* importOptsGBox = new QGroupBox();
@@ -2350,8 +2530,8 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 	m_data->m_animTakeCmb = new QComboBox();
 	m_data->m_animTakeCmb->setObjectName( name % "TakeToImportCmb" );
 	m_data->m_animTakeCmb->addItem( tr( c_none ) );
-	//m_data->m_animTakeCmb->insertSeparator(m_data->m_animTakeCmb->count() );
-	m_data->m_animTakeCmb->addItems( animStackNames );
+	//m_data->m_animTakeCmb->insertSeparator( m_data->m_animTakeCmb->count() );
+	m_data->m_animTakeCmb->addItems( importer->getAnimStackNames() );
 	m_data->m_animTakeCmb->setCurrentIndex( 0 );
 	m_data->m_animTakeCmb->setFixedHeight( btnHeight );
 	animLyt->addWidget( m_data->m_animTakeCmb, 1 );
@@ -2362,7 +2542,8 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 
 	mainLyt->addWidget( importOptsGBox );
 
-	if( !errorList.isEmpty() )
+	const QString errorList = importer->getErrorList().join( "\n" );
+	if ( !errorList.isEmpty() )
 	{
 		// Footer
 		QGroupBox* reportGrp = new QGroupBox();
@@ -2378,7 +2559,7 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 
 		QLabel* preImportLbl = new QLabel();
 		preImportLbl->setObjectName( name % "PreImportReportLbl" );
-		preImportLbl->setText( errorList.join( "\n" ) );
+		preImportLbl->setText( errorList );
 		preImportLbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
 
 		QBoxLayout* preImportLyt = new QVBoxLayout();
@@ -2398,6 +2579,10 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer, const QStringList &
 		reportGrp->setLayout( reportLyt );
 
 		mainLyt->addWidget( reportGrp );
+	}
+	else
+	{
+		mainLyt->addStretch( 1 );
 	}
 
 	setLayout( mainLyt );

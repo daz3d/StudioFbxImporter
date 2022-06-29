@@ -78,6 +78,14 @@ public:
 	// IMPLEMENTATIONS
 	//
 
+	QString		getFileVersion() const;
+	QString		getFileAuthor() const;
+	QString		getOriginalAppVendor() const;
+	QString		getOriginalAppName() const;
+	QString		getOriginalAppVersion() const;
+	QStringList	getAnimStackNames() const;
+	QStringList	getErrorList() const;
+
 protected:
 
 	int		getOptions( DzFileIOSettings* options, const DzFileIOSettings* impOptions, const QString &filename );
@@ -147,8 +155,8 @@ private:
 	};
 
 
-	void		fbxPreImport( QStringList &animStackNames, QStringList &errorList ) const;
-	void		fbxPreImportRecurse( FbxNode* fbxNode, QStringList &errorList ) const;
+	void		fbxPreImport();
+	void		fbxPreImportRecurse( FbxNode* fbxNode );
 
 	DzTexture*	toTexture( FbxProperty fbxProperty );
 
@@ -178,10 +186,18 @@ private:
 
 
 	bool				m_fbxRead;
-	FbxManager*				m_fbxManager;
-	FbxScene*				m_fbxScene;
-	FbxAnimStack*			m_fbxAnimStack;
-	FbxAnimLayer*			m_fbxAnimLayer;
+	FbxManager*			m_fbxManager;
+	FbxScene*			m_fbxScene;
+	QStringList			m_animStackNames;
+	FbxAnimStack*		m_fbxAnimStack;
+	FbxAnimLayer*		m_fbxAnimLayer;
+	FbxString			m_fbxFileAuthor;
+	FbxString			m_fbxOrigAppVendor;
+	FbxString			m_fbxOrigAppName;
+	FbxString			m_fbxOrigAppVersion;
+	int					m_fbxFileMajor;
+	int					m_fbxFileMinor;
+	int					m_fbxFileRevision;
 
 	QVector<Skinning>		m_skins;
 	QMap<FbxNode*, DzNode*>	m_nodeMap;
@@ -189,6 +205,7 @@ private:
 	DzTime					m_dsEndTime;
 
 	bool					m_suppressRigErrors;
+	QStringList				m_errorList;
 
 	QDir					m_folder;
 
@@ -203,7 +220,7 @@ private:
 class DzFbxImportFrame : public DzFileIOFrame {
 	Q_OBJECT
 public:
-	DzFbxImportFrame( DzFbxImporter* importer, const QStringList &animStackNames, const QStringList &errorList );
+	DzFbxImportFrame( DzFbxImporter* importer );
 	~DzFbxImportFrame();
 
 	//
