@@ -74,8 +74,8 @@
 namespace
 {
 
-const QString c_optionTake( "Take" );
-const QString c_optionRunSilent( "RunSilent" );
+const QString c_optTake( "Take" );
+const QString c_optRunSilent( "RunSilent" );
 
 DzFigure* createFigure()
 {
@@ -237,8 +237,8 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 		return;
 	}
 
-	options->setStringValue( c_optionTake, QString() );
-	options->setIntValue( c_optionRunSilent, 0 );
+	options->setStringValue( c_optTake, QString() );
+	options->setIntValue( c_optRunSilent, 0 );
 }
 
 
@@ -290,7 +290,7 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 	optionsShown = getOptionsShown();
 #endif
 
-	if ( optionsShown || impOptions->getIntValue( c_optionRunSilent, 0 ) )
+	if ( optionsShown || impOptions->getIntValue( c_optRunSilent, 0 ) )
 	{
 		if ( optionsShown )
 		{
@@ -342,7 +342,7 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 	frame->getOptions( options );
 
 	// if handling the options dialog ourselves, we also need to save the state
-	options->setIntValue( c_optionRunSilent, 0 );
+	options->setIntValue( c_optRunSilent, 0 );
 	saveOptions( options );
 
 	return true;
@@ -434,7 +434,7 @@ void DzFbxImporter::fbxRead( const QString &filename )
 	fbxImporter->Destroy();
 
 	const FbxDocumentInfo* fbxSceneInfo = m_fbxScene->GetSceneInfo();
-	m_fbxFileAuthor = fbxSceneInfo->mAuthor;
+	m_fbxSceneAuthor = fbxSceneInfo->mAuthor;
 	m_fbxOrigAppVendor = fbxSceneInfo->Original_ApplicationVendor;
 	m_fbxOrigAppName = fbxSceneInfo->Original_ApplicationName;
 	m_fbxOrigAppVersion = fbxSceneInfo->Original_ApplicationVersion;
@@ -712,7 +712,7 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 		return DZ_USER_CANCELLED_OPERATION;
 	}
 
-	m_takeName = impOptions->getStringValue( c_optionTake, QString() );
+	m_takeName = impOptions->getStringValue( c_optTake, QString() );
 
 #if DZ_SDK_4_12_OR_GREATER
 	clearImportedNodes();
@@ -801,9 +801,9 @@ QString DzFbxImporter::getFileVersion() const
 
 /**
 **/
-QString DzFbxImporter::getFileAuthor() const
+QString DzFbxImporter::getSceneAuthor() const
 {
-	return QString( m_fbxFileAuthor );
+	return QString( m_fbxSceneAuthor );
 }
 
 /**
@@ -1284,8 +1284,8 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 				bool hasSkin = false;
 				for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
 				{
-					const FbxDeformer* deformer = fbxMesh->GetDeformer( i );
-					if ( deformer->GetClassId().Is( FbxSkin::ClassId ) )
+					const FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( i );
+					if ( fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
 					{
 						hasSkin = true;
 						break;
@@ -2447,20 +2447,6 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	QLabel* lbl;
 
-	const QString fileAuthor = importer->getFileAuthor();
-	if ( !fileAuthor.isEmpty() )
-	{
-		lbl = new QLabel(tr("Author:"));
-		lbl->setObjectName( name % "FileAuthorLbl" );
-		lbl->setAlignment( Qt::AlignRight );
-		fileInfoLyt->addWidget( lbl, row, 0 );
-
-		lbl = new QLabel( fileAuthor );
-		lbl->setObjectName( name % "FileAuthorValueLbl" );
-		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
-		fileInfoLyt->addWidget( lbl, row++, 1 );
-	}
-
 	const QString fileVersion = importer->getFileVersion();
 	if ( fileVersion != "Unknown (0.0.0)" )
 	{
@@ -2471,6 +2457,20 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 		lbl = new QLabel( fileVersion );
 		lbl->setObjectName( name % "FileVersionValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		fileInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString sceneAuthor = importer->getSceneAuthor();
+	if ( !sceneAuthor.isEmpty() )
+	{
+		lbl = new QLabel(tr("Author:"));
+		lbl->setObjectName( name % "SceneAuthorLbl" );
+		lbl->setAlignment( Qt::AlignRight );
+		fileInfoLyt->addWidget( lbl, row, 0 );
+
+		lbl = new QLabel( sceneAuthor );
+		lbl->setObjectName( name % "SceneAuthorValueLbl" );
 		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
 		fileInfoLyt->addWidget( lbl, row++, 1 );
 	}
@@ -2605,7 +2605,7 @@ void DzFbxImportFrame::setOptions( const DzFileIOSettings* options, const QStrin
 		return;
 	}
 
-	const QString take = options->getStringValue( c_optionTake, QString() );
+	const QString take = options->getStringValue( c_optTake, QString() );
 	for ( int i = 0; i < m_data->m_animTakeCmb->count(); i++ )
 	{
 		if ( m_data->m_animTakeCmb->itemText( i ) == take )
@@ -2627,7 +2627,7 @@ void DzFbxImportFrame::getOptions( DzFileIOSettings* options ) const
 	}
 
 	const QString animTake = m_data->m_animTakeCmb->currentText();
-	options->setStringValue( c_optionTake, animTake != tr( c_none ) ? animTake : QString() );
+	options->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
 }
 
 /**

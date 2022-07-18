@@ -79,7 +79,7 @@ public:
 	//
 
 	QString		getFileVersion() const;
-	QString		getFileAuthor() const;
+	QString		getSceneAuthor() const;
 	QString		getOriginalAppVendor() const;
 	QString		getOriginalAppName() const;
 	QString		getOriginalAppVersion() const;
@@ -191,7 +191,7 @@ private:
 	QStringList			m_animStackNames;
 	FbxAnimStack*		m_fbxAnimStack;
 	FbxAnimLayer*		m_fbxAnimLayer;
-	FbxString			m_fbxFileAuthor;
+	FbxString			m_fbxSceneAuthor;
 	FbxString			m_fbxOrigAppVendor;
 	FbxString			m_fbxOrigAppName;
 	FbxString			m_fbxOrigAppVersion;
