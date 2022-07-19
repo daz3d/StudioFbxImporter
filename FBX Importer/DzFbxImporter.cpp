@@ -3135,11 +3135,15 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	m_data->m_includePolygonSetsCbx->setObjectName( name % "IncludePolygonSetsCbx" );
 	m_data->m_includePolygonSetsCbx->setText( tr( "Include Polygon Sets" ) );
 	geometryLyt->addWidget( m_data->m_includePolygonSetsCbx );
+	DzConnect( m_data->m_includePolygonSetsCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setIncludePolygonSets(bool)) );
 
 	m_data->m_includePolygonGroupsCbx = new QCheckBox();
 	m_data->m_includePolygonGroupsCbx->setObjectName( name % "IncludePolygonGroupsCbx" );
 	m_data->m_includePolygonGroupsCbx->setText( tr( "Include Polygon Groups" ) );
 	geometryLyt->addWidget( m_data->m_includePolygonGroupsCbx );
+	DzConnect( m_data->m_includePolygonGroupsCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setIncludePolygonGroups(bool)) );
 
 	geometryGBox->setLayout( geometryLyt );
 
