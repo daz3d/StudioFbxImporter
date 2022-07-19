@@ -100,6 +100,8 @@ public slots:
 	void		setIncludeAnimations( bool yesNo );
 	void		setTakeName( const QString &name );
 
+	void		setIncludePolygonGroups( bool yesNo );
+
 protected:
 
 	int		getOptions( DzFileIOSettings* options, const DzFileIOSettings* impOptions, const QString &filename );
@@ -237,6 +239,8 @@ private:
 
 	bool				m_includeAnimations;
 	QString				m_takeName;
+
+	bool				m_includePolygonGroups;
 
 	Node*		m_root;
 };

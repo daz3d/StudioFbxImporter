@@ -82,10 +82,14 @@ const QString c_optTake( "Take" );
 
 const QString c_optIncAnimations( "IncludeAnimations" );
 
+const QString c_optIncPolygonGroups( "IncludePolygonGroups" );
+
 const QString c_optRunSilent( "RunSilent" );
 
 // settings default values
 const bool c_defaultIncludeAnimations = false;
+
+const bool c_defaultIncludePolygonGroups = false;
 
 // functions
 DzFigure* createFigure()
@@ -176,6 +180,7 @@ DzFbxImporter::DzFbxImporter() :
 	m_dsEndTime( 0 ),
 	m_suppressRigErrors( false ),
 	m_includeAnimations( false ),
+	m_includePolygonGroups( c_defaultIncludePolygonGroups ),
 	m_root( NULL )
 {}
 
@@ -252,6 +257,9 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 
 	options->setBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	options->setStringValue( c_optTake, QString() );
+
+	options->setBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
+
 	options->setIntValue( c_optRunSilent, 0 );
 }
 
@@ -740,6 +748,8 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 	m_includeAnimations = options.getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	m_takeName = options.getStringValue( c_optTake, QString() );
 
+	m_includePolygonGroups = options.getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
+
 #if DZ_SDK_4_12_OR_GREATER
 	clearImportedNodes();
 #endif
@@ -931,6 +941,13 @@ void DzFbxImporter::setIncludeAnimations( bool yesNo )
 void DzFbxImporter::setTakeName( const QString &name )
 {
 	m_takeName = name;
+}
+
+/**
+**/
+void DzFbxImporter::setIncludePolygonGroups( bool yesNo )
+{
+	m_includePolygonGroups = yesNo;
 }
 
 /**
@@ -1978,7 +1995,9 @@ void DzFbxImporter::fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool 
 
 	const int numPolygons = fbxMesh->GetPolygonCount();
 
-	const FbxGeometryElementPolygonGroup* fbxPolygonGroup = fbxMesh->GetElementPolygonGroup( 0 );
+	const FbxGeometryElementPolygonGroup* fbxPolygonGroup = m_includePolygonGroups ?
+		fbxMesh->GetElementPolygonGroup( 0 ) : NULL;
+
 	// check whether we have compatible polygon group info;
 	// count is 0 since FBX SDK 2020.0;
 	// count is as expected with FBX SDK 2019.5 and prior
@@ -2014,7 +2033,7 @@ void DzFbxImporter::fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool 
 			}
 		}
 
-		DzFacet face; //keep outside of for loop
+		DzFacet face;
 
 		// facet vertices
 		int triFanRoot = -1;
@@ -2505,13 +2524,16 @@ struct DzFbxImportFrame::Data
 	Data( DzFbxImporter* importer ) :
 		m_importer( importer ),
 		m_includeAnimationCbx( NULL ),
-		m_animationTakeCmb( NULL )
+		m_animationTakeCmb( NULL ),
+		m_includePolygonGroupsCbx( NULL )
 	{}
 
 	DzFbxImporter*	m_importer;
 
 	QCheckBox*		m_includeAnimationCbx;
 	QComboBox*		m_animationTakeCmb;
+
+	QCheckBox*		m_includePolygonGroupsCbx;
 };
 
 namespace
@@ -2783,6 +2805,24 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	mainLyt->addWidget( propertiesGBox );
 
+
+	// Geometry
+	QGroupBox* geometryGBox = new QGroupBox( tr( "Geometry :" ) );
+	geometryGBox->setObjectName( name % "GeometryGBox" );
+
+	QBoxLayout* geometryLyt = new QVBoxLayout();
+	geometryLyt->setSpacing( margin );
+	geometryLyt->setMargin( margin );
+
+	m_data->m_includePolygonGroupsCbx = new QCheckBox();
+	m_data->m_includePolygonGroupsCbx->setObjectName( name % "IncludePolygonGroupsCbx" );
+	m_data->m_includePolygonGroupsCbx->setText( tr( "Include Polygon Groups" ) );
+	geometryLyt->addWidget( m_data->m_includePolygonGroupsCbx );
+
+	geometryGBox->setLayout( geometryLyt );
+
+	mainLyt->addWidget( geometryGBox );
+
 	// Footer
 	const QString errorList = importer->getErrorList().join( "\n" );
 
@@ -2869,6 +2909,8 @@ void DzFbxImportFrame::setOptions( const DzFileIOSettings* options, const QStrin
 			break;
 		}
 	}
+
+	m_data->m_includePolygonGroupsCbx->setChecked( options->getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups ) );
 }
 
 /**
@@ -2884,6 +2926,8 @@ void DzFbxImportFrame::getOptions( DzFileIOSettings* options ) const
 	options->setBoolValue( c_optIncAnimations, m_data->m_includeAnimationCbx->isChecked() );
 	const QString animTake = m_data->m_animationTakeCmb->currentText();
 	options->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
+
+	options->setBoolValue( c_optIncPolygonGroups, m_data->m_includePolygonGroupsCbx->isChecked() );
 }
 
 /**
