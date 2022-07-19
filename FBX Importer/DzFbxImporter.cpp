@@ -60,6 +60,7 @@
 #include "dzpresentation.h"
 #include "dzprogress.h"
 #include "dzscene.h"
+#include "dzselectionmap.h"
 #include "dzsettings.h"
 #include "dzskinbinding.h"
 #include "dzstyle.h"
@@ -105,8 +106,8 @@ DzFigure* createFigure()
 	followModeControl->setValue( DzSkeleton::fmAutoFollow );
 #else
 	// DzSkeleton::getFollowModeControl() is not in the 4.5 SDK, so we attempt
-	// to use the meta-object to call the methods. If this fails, we attempt to
-	// find the property by name and if found set its value.
+	// to use the meta-object to call the methods - since 4.8.0.23. If this fails,
+	// we attempt to find the property by name and if found set its value.
 
 	if ( !QMetaObject::invokeMethod( dsFigure,
 		"getFollowModeControl", Q_RETURN_ARG( DzEnumProperty*, followModeControl ) ) 
@@ -119,6 +120,8 @@ DzFigure* createFigure()
 		}
 	}
 #endif
+
+	dsFigure->setDrawGLBones( true );
 
 	return dsFigure;
 }
@@ -567,8 +570,6 @@ void DzFbxImporter::fbxImport()
 				continue;
 			}
 
-			dsFigure->setDrawGLBones( true );
-
 			DzSkeleton* crossSkeleton = NULL;
 			for ( int j = 0; j < fbxSkin->GetClusterCount(); j++ )
 			{
@@ -720,6 +721,12 @@ void DzFbxImporter::fbxImport()
 
 		dzScene->setAnimRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
 		dzScene->setPlayRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
+	}
+
+	QMap<Node*, QString>::iterator nodeFaceGroupIt;
+	for ( nodeFaceGroupIt = m_nodeFaceGroupMap.begin(); nodeFaceGroupIt != m_nodeFaceGroupMap.end(); ++nodeFaceGroupIt )
+	{
+		updateSelectionMap( nodeFaceGroupIt.key() );
 	}
 }
 
@@ -1394,13 +1401,21 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 				case FbxSkeleton::eRoot:
 					node->dsNode = createFigure();
 					break;
-				case FbxSkeleton::eLimb:
-					node->dsNode = new DzBone();
-					node->dsNode->setInheritScale( true );
-					break;
+				case FbxSkeleton::eLimb: //intentional fall-through
 				case FbxSkeleton::eLimbNode:
-					node->dsNode = new DzBone();
-					node->dsNode->setInheritScale( true );
+					{
+						node->dsNode = new DzBone();
+						node->dsNode->setInheritScale( true );
+
+#if FBXSDK_VERSION_MAJOR >= 2016
+						const FbxProperty fbxPropertyFaceGroup = node->fbxNode->FindProperty( "StudioNodeFaceGroup" );
+						if ( fbxPropertyFaceGroup.IsValid() )
+						{
+							const QString selectionSetName( fbxPropertyFaceGroup.Get<FbxString>() );
+							m_nodeFaceGroupMap.insert( node, selectionSetName );
+						}
+#endif
+					}
 					break;
 				case FbxSkeleton::eEffector:
 					break;
@@ -2205,6 +2220,72 @@ void DzFbxImporter::fbxImportPolygonSets( DzNode* dsMeshNode, DzFacetMesh* dsMes
 		Q_UNUSED( removed )
 #endif
 	}
+}
+
+/**
+**/
+void DzFbxImporter::updateSelectionMap( Node* node )
+{
+	const QString fbxSelSetName = m_nodeFaceGroupMap.value( node );
+	if ( fbxSelSetName.isEmpty() )
+	{
+		return;
+	}
+
+	QStringList fbxSelSetNameParts = fbxSelSetName.split( "__" );
+	const QString dsFaceGroupName( fbxSelSetNameParts.first() );
+	const QString dsMeshNodeName( fbxSelSetNameParts.last() );
+
+	DzBone* dsBone = qobject_cast<DzBone*>( node->dsNode );
+	if ( !dsBone )
+	{
+		return;
+	}
+
+	DzSkeleton* dsSkeleton = qobject_cast<DzSkeleton*>( dsBone->getSkeleton() );
+	if ( !dsSkeleton )
+	{
+		return;
+	}
+
+	if ( dsSkeleton->getName() != dsMeshNodeName )
+	{
+		return;
+	}
+
+	const DzObject* dsObject = dsSkeleton->getObject();
+	if ( !dsObject )
+	{
+		return;
+	}
+
+	const DzShape* dsShape = dsObject->getCurrentShape();
+	if ( !dsShape )
+	{
+		return;
+	}
+
+	const DzFacetMesh* dsMesh = qobject_cast<DzFacetMesh*>( dsShape->getGeometry() );
+	if ( !dsMesh )
+	{
+		return;
+	}
+
+	if ( !dsMesh->findFaceGroup( dsFaceGroupName ) )
+	{
+		return;
+	}
+
+	DzSelectionMap* dsSelectionMap = dsSkeleton->getSelectionMap();
+	if ( !dsSelectionMap )
+	{
+		dsSelectionMap = new DzSelectionMap();
+		dsSkeleton->setSelectionMap( dsSelectionMap );
+	}
+
+	dsSelectionMap->addPair( dsFaceGroupName, dsBone );
+
+	dsSkeleton->setDrawGLBones( false );
 }
 
 /**

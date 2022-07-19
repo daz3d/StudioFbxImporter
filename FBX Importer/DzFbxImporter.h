@@ -196,6 +196,8 @@ private:
 	void		fbxImportSkin( Node* node );
 	void		fbxImportAnim( Node* node );
 
+	void		updateSelectionMap( Node* node );
+
 	void		replicateSkeleton( DzSkeleton* crossSkeleton, Skinning &skinning );
 
 	void		fbxRead( const QString &filename );
@@ -229,6 +231,7 @@ private:
 
 	QVector<Skinning>		m_skins;
 	QMap<FbxNode*, DzNode*>	m_nodeMap;
+	QMap<Node*, QString>	m_nodeFaceGroupMap;
 	bool					m_needConversion;
 	DzTime					m_dsEndTime;
 
