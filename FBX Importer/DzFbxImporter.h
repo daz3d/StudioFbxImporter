@@ -97,6 +97,7 @@ public:
 
 public slots:
 
+	void		setRotationLimits( bool enable );
 	void		setIncludeAnimations( bool enable );
 	void		setTakeName( const QString &name );
 
@@ -247,6 +248,7 @@ private:
 
 	QVector<DzMaterial*>	m_dsMaterials;
 
+	bool		m_includeRotationLimits;
 	bool		m_includeAnimations;
 	QString		m_takeName;
 

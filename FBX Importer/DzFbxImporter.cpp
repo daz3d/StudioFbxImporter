@@ -82,6 +82,7 @@ namespace
 // settings keys
 const QString c_optTake( "Take" );
 
+const QString c_optIncRotationLimits( "IncludeRotationLimits" );
 const QString c_optIncAnimations( "IncludeAnimations" );
 
 const QString c_optIncPolygonSets( "IncludePolygonSets" );
@@ -95,6 +96,7 @@ const QString c_optStudioSceneIDs( "IncludeSceneIDs" );
 const QString c_optRunSilent( "RunSilent" );
 
 // settings default values
+const bool c_defaultIncludeRotationLimits = true;
 const bool c_defaultIncludeAnimations = false;
 
 const bool c_defaultIncludePolygonSets = true;
@@ -195,6 +197,7 @@ DzFbxImporter::DzFbxImporter() :
 	m_needConversion( false ),
 	m_dsEndTime( 0 ),
 	m_suppressRigErrors( false ),
+	m_includeRotationLimits( c_defaultIncludeRotationLimits ),
 	m_includeAnimations( false ),
 	m_includePolygonSets( c_defaultIncludePolygonSets ),
 	m_includePolygonGroups( c_defaultIncludePolygonGroups ),
@@ -277,6 +280,7 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 	}
 
 	// Properties
+	options->setBoolValue( c_optIncRotationLimits, c_defaultIncludeRotationLimits );
 	options->setBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	options->setStringValue( c_optTake, QString() );
 
@@ -791,12 +795,16 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 		return DZ_USER_CANCELLED_OPERATION;
 	}
 
+	// Properties
+	m_includeRotationLimits = options.getBoolValue( c_optIncRotationLimits, c_defaultIncludeRotationLimits );
 	m_includeAnimations = options.getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	m_takeName = options.getStringValue( c_optTake, QString() );
 
+	// Geometry
 	m_includePolygonSets = options.getBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets );
 	m_includePolygonGroups = options.getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
 
+	// Custom Data
 	m_studioNodeNamesLabels = options.getBoolValue( c_optStudioNodeNamesLabels, c_defaultStudioNodeNames );
 	m_studioNodePresentation = options.getBoolValue( c_optStudioPresentation, c_defaultStudioNodePresentation );
 	m_studioNodeSelectionMap = options.getBoolValue( c_optStudioNodeSelectionMap, c_defaultStudioNodeSelectionMap );
@@ -979,6 +987,13 @@ QString DzFbxImporter::getOriginalAppVersion() const
 QStringList DzFbxImporter::getAnimStackNames() const
 {
 	return m_animStackNames;
+}
+
+/**
+**/
+void DzFbxImporter::setRotationLimits( bool enable )
+{
+	m_includeRotationLimits = enable;
 }
 
 /**
@@ -1734,7 +1749,10 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 			node->dsNode->getZPosControl()->setHidden( true );
 		}
 
-		setNodeRotationLimits( node->dsNode, node->fbxNode );
+		if ( m_includeRotationLimits )
+		{
+			setNodeRotationLimits( node->dsNode, node->fbxNode );
+		}
 
 		if ( m_studioSceneIDs )
 		{
@@ -2952,6 +2970,7 @@ struct DzFbxImportFrame::Data
 {
 	Data( DzFbxImporter* importer ) :
 		m_importer( importer ),
+		m_includeRotationLimitsCbx( NULL ),
 		m_includeAnimationCbx( NULL ),
 		m_animationTakeCmb( NULL ),
 		m_includePolygonSetsCbx( NULL ),
@@ -2964,6 +2983,7 @@ struct DzFbxImportFrame::Data
 
 	DzFbxImporter*	m_importer;
 
+	QCheckBox*		m_includeRotationLimitsCbx;
 	QCheckBox*		m_includeAnimationCbx;
 	QComboBox*		m_animationTakeCmb;
 
@@ -3219,6 +3239,13 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	propertiesLyt->setSpacing( margin );
 	propertiesLyt->setMargin( margin );
 
+	m_data->m_includeRotationLimitsCbx = new QCheckBox();
+	m_data->m_includeRotationLimitsCbx->setObjectName( name % "IncludeRotationLimitsCbx" );
+	m_data->m_includeRotationLimitsCbx->setText( tr( "Include Rotation Limits" ) );
+	propertiesLyt->addWidget( m_data->m_includeRotationLimitsCbx );
+	DzConnect( m_data->m_includeRotationLimitsCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setRotationLimits(bool)) );
+
 	m_data->m_includeAnimationCbx = new QCheckBox();
 	m_data->m_includeAnimationCbx->setObjectName( name % "IncludeAnimationCbx" );
 	m_data->m_includeAnimationCbx->setText( tr( "Include Animation" ) );
@@ -3391,6 +3418,7 @@ void DzFbxImportFrame::setOptions( const DzFileIOSettings* settings, const QStri
 	}
 
 	// Properties
+	m_data->m_includeRotationLimitsCbx->setChecked( settings->getBoolValue( c_optIncRotationLimits, c_defaultIncludeRotationLimits ) );
 	m_data->m_includeAnimationCbx->setChecked( settings->getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations ) );
 	const QString take = settings->getStringValue( c_optTake, QString() );
 	for ( int i = 0; i < m_data->m_animationTakeCmb->count(); i++ )
@@ -3424,6 +3452,7 @@ void DzFbxImportFrame::getOptions( DzFileIOSettings* settings ) const
 	}
 
 	// Properties
+	settings->setBoolValue( c_optIncRotationLimits, m_data->m_includeRotationLimitsCbx->isChecked() );
 	settings->setBoolValue( c_optIncAnimations, m_data->m_includeAnimationCbx->isChecked() );
 	const QString animTake = m_data->m_animationTakeCmb->currentText();
 	settings->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
