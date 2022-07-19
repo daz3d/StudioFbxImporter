@@ -3024,6 +3024,29 @@ QGroupBox* createCollapsibleGroupBox( const QString &title, const QString &basen
 	return groupBox;
 }
 
+QScrollArea* createScrollableWidget( QWidget* widgetToScroll, int margin, int spacing, const QString &nameBase )
+{
+	QWidget* scrollableWgt = new QWidget();
+	scrollableWgt->setObjectName( nameBase % "ScrollWgt" );
+
+	QVBoxLayout* scrollableLyt = new QVBoxLayout();
+	scrollableLyt->setMargin( margin );
+	scrollableLyt->setSpacing( spacing );
+
+	scrollableLyt->addWidget( widgetToScroll );
+
+	scrollableLyt->addStretch();
+
+	scrollableWgt->setLayout( scrollableLyt );
+
+	QScrollArea* scrollArea = new QScrollArea();
+	scrollArea->setObjectName( nameBase % "ScrollArea" );
+	scrollArea->setWidgetResizable( true );
+	scrollArea->setWidget( scrollableWgt );
+
+	return scrollArea;
+}
+
 const char* c_none = QT_TRANSLATE_NOOP( "DzFbxImportFrame", "<None>" );
 
 } //namespace
@@ -3352,25 +3375,12 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	reportLyt->setSpacing( margin );
 	reportLyt->setMargin( margin );
 
-	QWidget* preImportWgt = new QWidget();
-	preImportWgt->setObjectName( name % "PreImportReportWgt" );
-
 	QLabel* preImportLbl = new QLabel();
 	preImportLbl->setObjectName( name % "PreImportReportLbl" );
 	preImportLbl->setText( !errorList.isEmpty() ? errorList : tr( "Import Ready." ) );
 	preImportLbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
 
-	QVBoxLayout* preImportLyt = new QVBoxLayout();
-	preImportLyt->setSpacing( margin );
-	preImportLyt->setMargin( margin );
-	preImportLyt->addWidget( preImportLbl );
-	preImportLyt->addStretch();
-	preImportWgt->setLayout( preImportLyt );
-
-	QScrollArea* preImportScroll = new QScrollArea();
-	preImportScroll->setObjectName( name % "PreImportReportScrollArea" );
-	preImportScroll->setWidgetResizable( true );
-	preImportScroll->setWidget( preImportWgt );
+	QScrollArea* preImportScroll = createScrollableWidget( preImportLbl, margin, margin, name % "PreImportReport" );
 
 	reportLyt->addWidget( preImportScroll, 1 );
 
