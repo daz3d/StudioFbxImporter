@@ -334,13 +334,25 @@ int DzFbxImporter::getOptions( DzFileIOSettings* options, const DzFileIOSettings
 #if DZ_SDK_4_12_OR_GREATER
 		copySettings( options, impOptions );
 #else
-		// DzFileIO::copySettings() is not in the 4.5 SDK, so we attempt
-		// to use the meta-object to call the method.
-
-		bool im = QMetaObject::invokeMethod( this, "copySettings",
-			Q_ARG( DzFileIOSettings*, options ),
-			Q_ARG( const DzFileIOSettings*, impOptions ) );
-		assert( im );
+		// DzFileIO::copySettings() is not in the 4.5 SDK, and it is not exposed
+		// to QMetaObject::invokedMethod() in later builds, so we copy manually.
+		for ( int i = 0, n = options->getNumValues(); i < n; i++ )
+		{
+			const QString key = options->getKey( i );
+			switch ( options->getValueType( i ) )
+			{
+			default:
+			case DzSettings::StringValue:
+			case DzSettings::IntValue:
+			case DzSettings::BoolValue:
+			case DzSettings::FloatValue:
+				impOptions->copySetting( key, options );
+				break;
+			case DzSettings::SettingsValue:
+				impOptions->copySetting( key, options->getSettingsValue( key ) );
+				break;
+			}
+		}
 #endif
 
 		return true;
