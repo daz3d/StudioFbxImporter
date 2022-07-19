@@ -52,6 +52,7 @@
 #if DZ_SDK_4_12_OR_GREATER
 #include "dzgraftingfigureshape.h"
 #endif // DZ_SDK_4_12_OR_GREATER
+#include "dzdynamicdividerwgt.h"
 #include "dzimagemgr.h"
 #include "dzmorph.h"
 #include "dzmorphdeltas.h"
@@ -3253,6 +3254,14 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	mainLyt->addWidget( sceneInfoGBox );
 
+	QWidget* scrollableOptionsWgt = new QWidget();
+	scrollableOptionsWgt->setObjectName( name % "ScrollableOptionsWgt" );
+
+
+	QVBoxLayout* scrollableOptionsLyt = new QVBoxLayout();
+	scrollableOptionsLyt->setSpacing( margin );
+	scrollableOptionsLyt->setMargin( 0 );
+
 
 	// Properties
 	QGroupBox* propertiesGBox = new QGroupBox( tr( "Properties :" ) );
@@ -3293,7 +3302,7 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	propertiesGBox->setLayout( propertiesLyt );
 
-	mainLyt->addWidget( propertiesGBox );
+	scrollableOptionsLyt->addWidget( propertiesGBox );
 
 
 	// Geometry
@@ -3320,7 +3329,7 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	geometryGBox->setLayout( geometryLyt );
 
-	mainLyt->addWidget( geometryGBox );
+	scrollableOptionsLyt->addWidget( geometryGBox );
 
 
 	// Custom Data
@@ -3361,7 +3370,11 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	customDataGBox->setLayout( customDataLyt );
 
-	mainLyt->addWidget( customDataGBox );
+	scrollableOptionsLyt->addWidget( customDataGBox );
+
+	scrollableOptionsWgt->setLayout( scrollableOptionsLyt );
+
+	QScrollArea* scrollableOptionsArea = createScrollableWidget( scrollableOptionsWgt, margin, margin, name % "Options" );
 
 
 	// Footer
@@ -3386,7 +3399,15 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	reportGrp->setLayout( reportLyt );
 
-	mainLyt->addWidget( reportGrp, 10 ); // stretch factor must be > scene info
+
+	DzDynamicDividerWgt* optionsStagingDvdr = new DzDynamicDividerWgt();
+	optionsStagingDvdr->setObjectName( name % "OptionsReportDvdr" );
+	optionsStagingDvdr->setDividerBar( Qt::Horizontal, DzDividerBar::BSThin );
+	optionsStagingDvdr->setMargin( margin );
+	optionsStagingDvdr->setFirstWidget( scrollableOptionsArea );
+	optionsStagingDvdr->setSecondWidget( reportGrp );
+	optionsStagingDvdr->setPreferredDividerPercent( 0.7 );
+	mainLyt->addWidget( optionsStagingDvdr, 10 );
 
 	setLayout( mainLyt );
 
