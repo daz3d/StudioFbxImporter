@@ -87,6 +87,11 @@ const QString c_optIncAnimations( "IncludeAnimations" );
 const QString c_optIncPolygonSets( "IncludePolygonSets" );
 const QString c_optIncPolygonGroups( "IncludePolygonGroups" );
 
+const QString c_optStudioNodeNamesLabels( "IncludeNodeNamesLabels" );
+const QString c_optStudioPresentation( "IncludeNodePresentation" );
+const QString c_optStudioNodeSelectionMap( "IncludeNodeSelectionMap" );
+const QString c_optStudioSceneIDs( "IncludeSceneIDs" );
+
 const QString c_optRunSilent( "RunSilent" );
 
 // settings default values
@@ -94,6 +99,11 @@ const bool c_defaultIncludeAnimations = false;
 
 const bool c_defaultIncludePolygonSets = true;
 const bool c_defaultIncludePolygonGroups = false;
+
+const bool c_defaultStudioNodeNames = true;
+const bool c_defaultStudioNodePresentation = true;
+const bool c_defaultStudioNodeSelectionMap = true;
+const bool c_defaultStudioSceneIDs = true;
 
 // functions
 DzFigure* createFigure()
@@ -188,6 +198,10 @@ DzFbxImporter::DzFbxImporter() :
 	m_includeAnimations( false ),
 	m_includePolygonSets( c_defaultIncludePolygonSets ),
 	m_includePolygonGroups( c_defaultIncludePolygonGroups ),
+	m_studioNodeNamesLabels( c_defaultStudioNodeNames ),
+	m_studioNodePresentation( c_defaultStudioNodePresentation ),
+	m_studioNodeSelectionMap( c_defaultStudioNodeSelectionMap ),
+	m_studioSceneIDs( c_defaultStudioSceneIDs ),
 	m_root( NULL )
 {}
 
@@ -262,11 +276,19 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 		return;
 	}
 
+	// Properties
 	options->setBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	options->setStringValue( c_optTake, QString() );
 
+	// Geometry
 	options->setBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets );
 	options->setBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
+
+	// Custom Data
+	options->setBoolValue( c_optStudioNodeNamesLabels, c_defaultStudioNodeNames );
+	options->setBoolValue( c_optStudioPresentation, c_defaultStudioNodePresentation );
+	options->setBoolValue( c_optStudioNodeSelectionMap, c_defaultStudioNodeSelectionMap );
+	options->setBoolValue( c_optStudioSceneIDs, c_defaultStudioSceneIDs );
 
 	options->setIntValue( c_optRunSilent, 0 );
 }
@@ -775,6 +797,11 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 	m_includePolygonSets = options.getBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets );
 	m_includePolygonGroups = options.getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
 
+	m_studioNodeNamesLabels = options.getBoolValue( c_optStudioNodeNamesLabels, c_defaultStudioNodeNames );
+	m_studioNodePresentation = options.getBoolValue( c_optStudioPresentation, c_defaultStudioNodePresentation );
+	m_studioNodeSelectionMap = options.getBoolValue( c_optStudioNodeSelectionMap, c_defaultStudioNodeSelectionMap );
+	m_studioSceneIDs = options.getBoolValue( c_optStudioSceneIDs, c_defaultStudioSceneIDs );
+
 #if DZ_SDK_4_12_OR_GREATER
 	clearImportedNodes();
 #endif
@@ -956,9 +983,9 @@ QStringList DzFbxImporter::getAnimStackNames() const
 
 /**
 **/
-void DzFbxImporter::setIncludeAnimations( bool yesNo )
+void DzFbxImporter::setIncludeAnimations( bool enable )
 {
-	m_includeAnimations = yesNo;
+	m_includeAnimations = enable;
 }
 
 /**
@@ -970,16 +997,44 @@ void DzFbxImporter::setTakeName( const QString &name )
 
 /**
 **/
-void DzFbxImporter::setIncludePolygonSets( bool yesNo )
+void DzFbxImporter::setIncludePolygonSets( bool enable )
 {
-	m_includePolygonSets = yesNo;
+	m_includePolygonSets = enable;
 }
 
 /**
 **/
-void DzFbxImporter::setIncludePolygonGroups( bool yesNo )
+void DzFbxImporter::setIncludePolygonGroups( bool enable )
 {
-	m_includePolygonGroups = yesNo;
+	m_includePolygonGroups = enable;
+}
+
+/**
+**/
+void DzFbxImporter::setStudioNodeNamesLabels( bool enable )
+{
+	m_studioNodeNamesLabels = enable;
+}
+
+/**
+**/
+void DzFbxImporter::setStudioNodePresentation( bool enable )
+{
+	m_studioNodePresentation = enable;
+}
+
+/**
+**/
+void DzFbxImporter::setStudioNodeSelectionMap( bool enable )
+{
+	m_studioNodeSelectionMap = enable;
+}
+
+/**
+**/
+void DzFbxImporter::setStudioSceneIDs( bool enable )
+{
+	m_studioSceneIDs = enable;
 }
 
 /**
@@ -1175,6 +1230,33 @@ static void setNodeScaling( DzNode* dsNode, FbxNode* fbxNode )
 	dsNode->getXScaleControl()->setValue( scaling[0] );
 	dsNode->getYScaleControl()->setValue( scaling[1] );
 	dsNode->getZScaleControl()->setValue( scaling[2] );
+}
+
+static void setNodeSceneID( DzNode* dsNode, FbxNode* fbxNode )
+{
+	QString dsSceneId;
+
+#if FBXSDK_VERSION_MAJOR >= 2016
+	const FbxProperty fbxSceneIdProperty = fbxNode->FindProperty( "StudioSceneID" );
+	if ( fbxSceneIdProperty.IsValid() )
+	{
+		dsSceneId = QString( fbxSceneIdProperty.Get<FbxString>() );
+	}
+#endif
+
+	if ( dsSceneId.isEmpty() )
+	{
+		return;
+	}
+
+	const DzUri nodeUri( dsSceneId );
+	if ( nodeUri.getFilePath().isEmpty() )
+	{
+		return;
+	}
+
+	dsNode->modifyAsset( nodeUri ); //cause assetUri to be set
+	dsNode->modifyAsset(); //cause assetUri to become the source and mark as modified
 }
 
 static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
@@ -1420,7 +1502,12 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 						node->dsNode->setInheritScale( true );
 
 #if FBXSDK_VERSION_MAJOR >= 2016
-						const FbxProperty fbxPropertyFaceGroup = node->fbxNode->FindProperty( "StudioNodeFaceGroup" );
+						FbxProperty fbxPropertyFaceGroup;
+						if ( m_studioNodeSelectionMap )
+						{
+							fbxPropertyFaceGroup = node->fbxNode->FindProperty( "StudioNodeFaceGroup" );
+						}
+
 						if ( fbxPropertyFaceGroup.IsValid() )
 						{
 							const QString selectionSetName( fbxPropertyFaceGroup.Get<FbxString>() );
@@ -1494,14 +1581,33 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 	{
 		m_nodeMap[node->fbxNode] = node->dsNode;
 
-		node->dsNode->setName( node->fbxNode->GetName() );
+		QString nodeName( node->fbxNode->GetName() );
+#if FBXSDK_VERSION_MAJOR >= 2016
+		FbxProperty fbxPropertyNodeName;
+		if ( m_studioNodeNamesLabels )
+		{
+			fbxPropertyNodeName = node->fbxNode->FindProperty( "StudioNodeName" );
+		}
+
+		if ( fbxPropertyNodeName.IsValid() )
+		{
+			nodeName = fbxPropertyNodeName.Get<FbxString>();
+		}
+#endif
+		node->dsNode->setName( nodeName );
+
 		if ( node->dsParent )
 		{
 			node->dsParent->addNodeChild( node->dsNode );
 		}
 
 #if FBXSDK_VERSION_MAJOR >= 2016
-		const FbxProperty fbxPropertyNodeLabel = node->fbxNode->FindProperty( "StudioNodeLabel" );
+		FbxProperty fbxPropertyNodeLabel;
+		if ( m_studioNodeNamesLabels )
+		{
+			fbxPropertyNodeLabel = node->fbxNode->FindProperty( "StudioNodeLabel" );
+		}
+
 		if ( fbxPropertyNodeLabel.IsValid() )
 		{
 			const QString nodeLabel( fbxPropertyNodeLabel.Get<FbxString>());
@@ -1509,7 +1615,10 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		}
 #endif
 
-		setNodePresentation( node->dsNode, node->fbxNode );
+		if ( m_studioNodePresentation )
+		{
+			setNodePresentation( node->dsNode, node->fbxNode );
+		}
 
 		setNodeInheritsScale( node->dsNode, node->fbxNode );
 
@@ -1626,6 +1735,11 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		}
 
 		setNodeRotationLimits( node->dsNode, node->fbxNode );
+
+		if ( m_studioSceneIDs )
+		{
+			setNodeSceneID( node->dsNode, node->fbxNode );
+		}
 	}
 }
 
@@ -2841,7 +2955,11 @@ struct DzFbxImportFrame::Data
 		m_includeAnimationCbx( NULL ),
 		m_animationTakeCmb( NULL ),
 		m_includePolygonSetsCbx( NULL ),
-		m_includePolygonGroupsCbx( NULL )
+		m_includePolygonGroupsCbx( NULL ),
+		m_studioNodeNameLabelCbx( NULL ),
+		m_studioPresentationCbx( NULL ),
+		m_studioSelectionMapCbx( NULL ),
+		m_studioSceneIDsCbx( NULL )
 	{}
 
 	DzFbxImporter*	m_importer;
@@ -2851,6 +2969,11 @@ struct DzFbxImportFrame::Data
 
 	QCheckBox*		m_includePolygonSetsCbx;
 	QCheckBox*		m_includePolygonGroupsCbx;
+
+	QCheckBox*		m_studioNodeNameLabelCbx;
+	QCheckBox*		m_studioPresentationCbx;
+	QCheckBox*		m_studioSelectionMapCbx;
+	QCheckBox*		m_studioSceneIDsCbx;
 };
 
 namespace
@@ -3149,6 +3272,48 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 
 	mainLyt->addWidget( geometryGBox );
 
+
+	// Custom Data
+	QGroupBox* customDataGBox = new QGroupBox( tr( "Custom Data :" ) );
+	customDataGBox->setObjectName( name % "CustomDataGBox" );
+
+	QVBoxLayout* customDataLyt = new QVBoxLayout();
+	customDataLyt->setSpacing( margin );
+	customDataLyt->setMargin( margin );
+
+	m_data->m_studioNodeNameLabelCbx = new QCheckBox();
+	m_data->m_studioNodeNameLabelCbx->setObjectName( name % "IncludeNodeNameLabelCbx" );
+	m_data->m_studioNodeNameLabelCbx->setText( tr( "Include Node Names/Labels" ) );
+	customDataLyt->addWidget( m_data->m_studioNodeNameLabelCbx );
+	DzConnect( m_data->m_studioNodeNameLabelCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setStudioNodeNamesLabels(bool)) );
+
+	m_data->m_studioPresentationCbx = new QCheckBox();
+	m_data->m_studioPresentationCbx->setObjectName( name % "IncludePresentationCbx" );
+	m_data->m_studioPresentationCbx->setText( tr( "Include Presentation" ) );
+	customDataLyt->addWidget( m_data->m_studioPresentationCbx );
+	DzConnect( m_data->m_studioPresentationCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setStudioNodePresentation(bool)) );
+
+	m_data->m_studioSelectionMapCbx = new QCheckBox();
+	m_data->m_studioSelectionMapCbx->setObjectName( name % "IncludeSelectionMapCbx" );
+	m_data->m_studioSelectionMapCbx->setText( tr( "Include Node Selection Map" ) );
+	customDataLyt->addWidget( m_data->m_studioSelectionMapCbx );
+	DzConnect( m_data->m_studioSelectionMapCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setStudioNodeSelectionMap(bool)) );
+
+	m_data->m_studioSceneIDsCbx = new QCheckBox();
+	m_data->m_studioSceneIDsCbx->setObjectName( name % "IncludeSceneIDssCbx" );
+	m_data->m_studioSceneIDsCbx->setText( tr( "Include Scene IDs" ) );
+	customDataLyt->addWidget( m_data->m_studioSceneIDsCbx );
+	DzConnect( m_data->m_studioSceneIDsCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setStudioSceneIDs(bool)) );
+
+	customDataGBox->setLayout( customDataLyt );
+
+	mainLyt->addWidget( customDataGBox );
+
+
 	// Footer
 	const QString errorList = importer->getErrorList().join( "\n" );
 
@@ -3217,16 +3382,17 @@ DzFbxImportFrame::~DzFbxImportFrame()
 
 /**
 **/
-void DzFbxImportFrame::setOptions( const DzFileIOSettings* options, const QString &filename )
+void DzFbxImportFrame::setOptions( const DzFileIOSettings* settings, const QString &filename )
 {
-	assert( options );
-	if ( !options )
+	assert( settings );
+	if ( !settings )
 	{
 		return;
 	}
 
-	m_data->m_includeAnimationCbx->setChecked( options->getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations ) );
-	const QString take = options->getStringValue( c_optTake, QString() );
+	// Properties
+	m_data->m_includeAnimationCbx->setChecked( settings->getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations ) );
+	const QString take = settings->getStringValue( c_optTake, QString() );
 	for ( int i = 0; i < m_data->m_animationTakeCmb->count(); i++ )
 	{
 		if ( m_data->m_animationTakeCmb->itemText( i ) == take )
@@ -3236,26 +3402,41 @@ void DzFbxImportFrame::setOptions( const DzFileIOSettings* options, const QStrin
 		}
 	}
 
-	m_data->m_includePolygonSetsCbx->setChecked( options->getBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets ) );
-	m_data->m_includePolygonGroupsCbx->setChecked( options->getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups ) );
+	// Geometry
+	m_data->m_includePolygonSetsCbx->setChecked( settings->getBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets ) );
+	m_data->m_includePolygonGroupsCbx->setChecked( settings->getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups ) );
+
+	// Custom Data
+	m_data->m_studioNodeNameLabelCbx->setChecked( settings->getBoolValue( c_optStudioNodeNamesLabels, c_defaultStudioNodeNames ) );
+	m_data->m_studioPresentationCbx->setChecked( settings->getBoolValue( c_optStudioPresentation, c_defaultStudioNodePresentation ) );
+	m_data->m_studioSelectionMapCbx->setChecked( settings->getBoolValue( c_optStudioNodeSelectionMap, c_defaultStudioNodeSelectionMap ) );
+	m_data->m_studioSceneIDsCbx->setChecked( settings->getBoolValue( c_optStudioSceneIDs, c_defaultStudioSceneIDs ) );
 }
 
 /**
 **/
-void DzFbxImportFrame::getOptions( DzFileIOSettings* options ) const
+void DzFbxImportFrame::getOptions( DzFileIOSettings* settings ) const
 {
-	assert( options );
-	if ( !options )
+	assert( settings );
+	if ( !settings )
 	{
 		return;
 	}
 
-	options->setBoolValue( c_optIncAnimations, m_data->m_includeAnimationCbx->isChecked() );
+	// Properties
+	settings->setBoolValue( c_optIncAnimations, m_data->m_includeAnimationCbx->isChecked() );
 	const QString animTake = m_data->m_animationTakeCmb->currentText();
-	options->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
+	settings->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
 
-	options->setBoolValue( c_optIncPolygonSets, m_data->m_includePolygonSetsCbx->isChecked() );
-	options->setBoolValue( c_optIncPolygonGroups, m_data->m_includePolygonGroupsCbx->isChecked() );
+	// Geometry
+	settings->setBoolValue( c_optIncPolygonSets, m_data->m_includePolygonSetsCbx->isChecked() );
+	settings->setBoolValue( c_optIncPolygonGroups, m_data->m_includePolygonGroupsCbx->isChecked() );
+
+	// Custom Data
+	settings->setBoolValue( c_optStudioNodeNamesLabels, m_data->m_studioNodeNameLabelCbx->isChecked() );
+	settings->setBoolValue( c_optStudioPresentation, m_data->m_studioPresentationCbx->isChecked() );
+	settings->setBoolValue( c_optStudioNodeSelectionMap, m_data->m_studioSelectionMapCbx->isChecked() );
+	settings->setBoolValue( c_optStudioSceneIDs, m_data->m_studioSceneIDsCbx->isChecked() );
 }
 
 /**

@@ -97,11 +97,16 @@ public:
 
 public slots:
 
-	void		setIncludeAnimations( bool yesNo );
+	void		setIncludeAnimations( bool enable );
 	void		setTakeName( const QString &name );
 
-	void		setIncludePolygonSets( bool yesNo );
-	void		setIncludePolygonGroups( bool yesNo );
+	void		setIncludePolygonSets( bool enable );
+	void		setIncludePolygonGroups( bool enable );
+
+	void		setStudioNodeNamesLabels( bool enable );
+	void		setStudioNodePresentation( bool enable );
+	void		setStudioNodeSelectionMap( bool enable );
+	void		setStudioSceneIDs( bool enable );
 
 protected:
 
@@ -242,11 +247,16 @@ private:
 
 	QVector<DzMaterial*>	m_dsMaterials;
 
-	bool				m_includeAnimations;
-	QString				m_takeName;
+	bool		m_includeAnimations;
+	QString		m_takeName;
 
-	bool				m_includePolygonSets;
-	bool				m_includePolygonGroups;
+	bool		m_includePolygonSets;
+	bool		m_includePolygonGroups;
+
+	bool		m_studioNodeNamesLabels;
+	bool		m_studioNodePresentation;
+	bool		m_studioNodeSelectionMap;
+	bool		m_studioSceneIDs;
 
 	Node*		m_root;
 };
@@ -264,8 +274,8 @@ public:
 
 	////////////////////
 	//from DzFileIOFrame
-	virtual void	setOptions( const DzFileIOSettings* options, const QString &filename );
-	virtual void	getOptions( DzFileIOSettings* options ) const;
+	virtual void	setOptions( const DzFileIOSettings* settings, const QString &filename );
+	virtual void	getOptions( DzFileIOSettings* settings ) const;
 
 protected:
 
