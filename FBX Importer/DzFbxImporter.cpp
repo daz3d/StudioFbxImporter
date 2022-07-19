@@ -198,7 +198,7 @@ DzFbxImporter::DzFbxImporter() :
 	m_dsEndTime( 0 ),
 	m_suppressRigErrors( false ),
 	m_includeRotationLimits( c_defaultIncludeRotationLimits ),
-	m_includeAnimations( false ),
+	m_includeAnimations( c_defaultIncludeAnimations ),
 	m_includePolygonSets( c_defaultIncludePolygonSets ),
 	m_includePolygonGroups( c_defaultIncludePolygonGroups ),
 	m_studioNodeNamesLabels( c_defaultStudioNodeNames ),
