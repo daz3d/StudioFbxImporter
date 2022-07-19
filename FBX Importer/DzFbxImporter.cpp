@@ -38,6 +38,9 @@
 #include "dzapp.h"
 #include "dzbone.h"
 #include "dzbonebinding.h"
+#if DZ_SDK_4_12_OR_GREATER
+#include "dzcollapsiblegroupbox.h"
+#endif //DZ_SDK_4_12_OR_GREATER
 #include "dzdefaultmaterial.h"
 #include "dzenumproperty.h"
 #include "dzfacetmesh.h"
@@ -74,9 +77,17 @@
 namespace
 {
 
+// settings keys
 const QString c_optTake( "Take" );
+
+const QString c_optIncAnimations( "IncludeAnimations" );
+
 const QString c_optRunSilent( "RunSilent" );
 
+// settings default values
+const bool c_defaultIncludeAnimations = false;
+
+// functions
 DzFigure* createFigure()
 {
 	DzFigure* dsFigure = new DzFigure();
@@ -160,9 +171,11 @@ DzFbxImporter::DzFbxImporter() :
 	m_fbxFileMajor( 0 ),
 	m_fbxFileMinor( 0 ),
 	m_fbxFileRevision( 0 ),
+	m_fbxFileBinary( -1 ),
 	m_needConversion( false ),
 	m_dsEndTime( 0 ),
 	m_suppressRigErrors( false ),
+	m_includeAnimations( false ),
 	m_root( NULL )
 {}
 
@@ -237,6 +250,7 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 		return;
 	}
 
+	options->setBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	options->setStringValue( c_optTake, QString() );
 	options->setIntValue( c_optRunSilent, 0 );
 }
@@ -431,10 +445,21 @@ void DzFbxImporter::fbxRead( const QString &filename )
 #endif
 	}
 
+	const FbxIOFileHeaderInfo* fbxHeaderInfo = fbxImporter->GetFileHeaderInfo();
+	m_fbxFileCreator = fbxHeaderInfo->mCreator;
+#if FBXSDK_VERSION_MAJOR > 2020 || (FBXSDK_VERSION_MAJOR == 2020 && FBXSDK_VERSION_MINOR >= 3)
+	m_fbxFileBinary = fbxHeaderInfo->mBinary ? 1 : 0;
+#endif
+
 	fbxImporter->Destroy();
 
 	const FbxDocumentInfo* fbxSceneInfo = m_fbxScene->GetSceneInfo();
 	m_fbxSceneAuthor = fbxSceneInfo->mAuthor;
+	m_fbxSceneTitle = fbxSceneInfo->mTitle;
+	m_fbxSceneSubject = fbxSceneInfo->mSubject;
+	m_fbxSceneKeywords = fbxSceneInfo->mKeywords;
+	m_fbxSceneRevision = fbxSceneInfo->mRevision;
+	m_fbxSceneComment = fbxSceneInfo->mComment;
 	m_fbxOrigAppVendor = fbxSceneInfo->Original_ApplicationVendor;
 	m_fbxOrigAppName = fbxSceneInfo->Original_ApplicationName;
 	m_fbxOrigAppVersion = fbxSceneInfo->Original_ApplicationVersion;
@@ -446,7 +471,7 @@ void DzFbxImporter::fbxRead( const QString &filename )
 **/
 void DzFbxImporter::fbxImport()
 {
-	if ( !m_takeName.isEmpty() )
+	if ( m_includeAnimations && !m_takeName.isEmpty() )
 	{
 		const QString idxPrefix( "idx::" );
 		if ( m_takeName.startsWith( idxPrefix ) )
@@ -712,7 +737,8 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 		return DZ_USER_CANCELLED_OPERATION;
 	}
 
-	m_takeName = impOptions->getStringValue( c_optTake, QString() );
+	m_includeAnimations = options.getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
+	m_takeName = options.getStringValue( c_optTake, QString() );
 
 #if DZ_SDK_4_12_OR_GREATER
 	clearImportedNodes();
@@ -750,7 +776,7 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 QString DzFbxImporter::getFileVersion() const
 {
 	QString sdkStr( "Unknown" );
-	const QString versionStr( "%1 (%2.%3.%4)" );
+	const QString versionStr( "%1 (%2.%3.%4)%5" );
 	switch ( m_fbxFileMajor )
 	{
 	case 7:
@@ -796,7 +822,31 @@ QString DzFbxImporter::getFileVersion() const
 		.arg( sdkStr )
 		.arg( m_fbxFileMajor )
 		.arg( m_fbxFileMinor )
-		.arg( m_fbxFileRevision );
+		.arg( m_fbxFileRevision )
+		.arg( getFileFormat() );
+}
+
+/**
+**/
+QString DzFbxImporter::getFileCreator() const
+{
+	return QString( m_fbxFileCreator );
+}
+
+/**
+**/
+QString DzFbxImporter::getFileFormat() const
+{
+	switch ( m_fbxFileBinary )
+	{
+	default:
+	case -1:
+		return QString();
+	case 0:
+		return " -- Ascii";
+	case 1:
+		return " -- Binary";
+	}
 }
 
 /**
@@ -804,6 +854,41 @@ QString DzFbxImporter::getFileVersion() const
 QString DzFbxImporter::getSceneAuthor() const
 {
 	return QString( m_fbxSceneAuthor );
+}
+
+/**
+**/
+QString DzFbxImporter::getSceneTitle() const
+{
+	return QString( m_fbxSceneTitle );
+}
+
+/**
+**/
+QString DzFbxImporter::getSceneSubject() const
+{
+	return QString( m_fbxSceneSubject );
+}
+
+/**
+**/
+QString DzFbxImporter::getSceneKeywords() const
+{
+	return QString( m_fbxSceneKeywords );
+}
+
+/**
+**/
+QString DzFbxImporter::getSceneRevision() const
+{
+	return QString( m_fbxSceneRevision );
+}
+
+/**
+**/
+QString DzFbxImporter::getSceneComment() const
+{
+	return QString( m_fbxSceneComment );
 }
 
 /**
@@ -832,6 +917,20 @@ QString DzFbxImporter::getOriginalAppVersion() const
 QStringList DzFbxImporter::getAnimStackNames() const
 {
 	return m_animStackNames;
+}
+
+/**
+**/
+void DzFbxImporter::setIncludeAnimations( bool yesNo )
+{
+	m_includeAnimations = yesNo;
+}
+
+/**
+**/
+void DzFbxImporter::setTakeName( const QString &name )
+{
+	m_takeName = name;
 }
 
 /**
@@ -2405,15 +2504,43 @@ struct DzFbxImportFrame::Data
 {
 	Data( DzFbxImporter* importer ) :
 		m_importer( importer ),
-		m_animTakeCmb( NULL )
+		m_includeAnimationCbx( NULL ),
+		m_animationTakeCmb( NULL )
 	{}
 
 	DzFbxImporter*	m_importer;
-	QComboBox*		m_animTakeCmb;
+
+	QCheckBox*		m_includeAnimationCbx;
+	QComboBox*		m_animationTakeCmb;
 };
 
 namespace
 {
+
+QGroupBox* createCollapsibleGroupBox( const QString &title, const QString &basename, bool collapsed = false )
+{
+#if DZ_SDK_4_12_OR_GREATER
+	DzCollapsibleGroupBox* groupBox = new DzCollapsibleGroupBox( title );
+	groupBox->setObjectName( basename % "GBox" );
+	groupBox->setCollapsed( collapsed );
+#else
+	QGroupBox* groupBox = NULL;
+	if ( const DzClassFactory* factory = dzApp->findClassFactory( "DzCollapsibleGroupBox" ) )
+	{
+		groupBox = qobject_cast<QGroupBox*>( factory->createInstance() );
+	}
+
+	if ( !groupBox )
+	{
+		groupBox = new QGroupBox();
+	}
+
+	groupBox->setObjectName( basename % "GBox" );
+	groupBox->setTitle( title );
+#endif //DZ_SDK_4_12_OR_GREATER
+
+	return groupBox;
+}
 
 const char* c_none = QT_TRANSLATE_NOOP( "DzFbxImportFrame", "<None>" );
 
@@ -2429,50 +2556,149 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	const int margin = style()->pixelMetric( DZ_PM_GeneralMargin );
 	const int btnHeight = style()->pixelMetric( DZ_PM_ButtonHeight );
 
+	QVector<QLabel*> leftLabels;
+	leftLabels.reserve( 10 );
+
 	QVBoxLayout* mainLyt = new QVBoxLayout();
 	mainLyt->setSpacing( margin );
 	mainLyt->setMargin( margin );
 
-	// File Info
-	QGroupBox* fileInfoGBox = new QGroupBox();
-	fileInfoGBox->setObjectName( name % "InfoGBox" );
-	fileInfoGBox->setTitle( tr( "File Info :" ) );
+	// Format
+	QGroupBox* formatGBox = new QGroupBox( tr( "Format :" ) );
+	formatGBox->setObjectName( name % "FormatGBox" );
 
-	QGridLayout* fileInfoLyt = new QGridLayout();
-	fileInfoLyt->setSpacing( margin );
-	fileInfoLyt->setMargin( margin );
-	fileInfoLyt->setColumnStretch( 1, 1 );
+	QGridLayout* formatLyt = new QGridLayout();
+	formatLyt->setSpacing( margin );
+	formatLyt->setMargin( margin );
+	formatLyt->setColumnStretch( 1, 1 );
 
 	int row = 0;
 
-	QLabel* lbl;
+	QLabel* lbl = new QLabel( tr( "Version:" ) );
+	lbl->setObjectName( name % "FileVersionLbl" );
+	lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+	formatLyt->addWidget( lbl, row, 0 );
+	leftLabels.push_back( lbl );
 
-	const QString fileVersion = importer->getFileVersion();
-	if ( fileVersion != "Unknown (0.0.0)" )
-	{
-		lbl = new QLabel( tr( "Version:" ) );
-		lbl->setObjectName( name % "FileVersionLbl" );
-		lbl->setAlignment( Qt::AlignRight );
-		fileInfoLyt->addWidget( lbl, row, 0 );
+	lbl = new QLabel( importer->getFileVersion() );
+	lbl->setObjectName( name % "FileVersionValueLbl" );
+	lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+	formatLyt->addWidget( lbl, row++, 1 );
 
-		lbl = new QLabel( fileVersion );
-		lbl->setObjectName( name % "FileVersionValueLbl" );
-		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
-		fileInfoLyt->addWidget( lbl, row++, 1 );
-	}
+	lbl = new QLabel( tr( "Creator:" ) );
+	lbl->setObjectName( name % "FileCreatorLbl" );
+	lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+	formatLyt->addWidget( lbl, row, 0 );
+	leftLabels.push_back( lbl );
+
+	lbl = new QLabel( importer->getFileCreator() );
+	lbl->setObjectName( name % "FileCreatorValueLbl" );
+	lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+	formatLyt->addWidget( lbl, row++, 1 );
+
+	formatGBox->setLayout( formatLyt );
+
+	mainLyt->addWidget( formatGBox );
+
+
+	// Scene Info
+	QGroupBox* sceneInfoGBox = createCollapsibleGroupBox( tr( "Scene :" ), name % "SceneInfo", true );
+
+	QGridLayout* sceneInfoLyt = new QGridLayout();
+	sceneInfoLyt->setSpacing( margin );
+	sceneInfoLyt->setMargin( margin );
+	sceneInfoLyt->setColumnStretch( 1, 1 );
+
+	row = 0;
 
 	const QString sceneAuthor = importer->getSceneAuthor();
 	if ( !sceneAuthor.isEmpty() )
 	{
-		lbl = new QLabel(tr("Author:"));
+		lbl = new QLabel( tr( "Author:" ) );
 		lbl->setObjectName( name % "SceneAuthorLbl" );
-		lbl->setAlignment( Qt::AlignRight );
-		fileInfoLyt->addWidget( lbl, row, 0 );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
 
 		lbl = new QLabel( sceneAuthor );
 		lbl->setObjectName( name % "SceneAuthorValueLbl" );
 		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
-		fileInfoLyt->addWidget( lbl, row++, 1 );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString sceneTitle = importer->getSceneTitle();
+	if ( !sceneTitle.isEmpty() )
+	{
+		lbl = new QLabel( tr( "Title:" ) );
+		lbl->setObjectName( name % "SceneTitleLbl" );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
+
+		lbl = new QLabel( sceneTitle );
+		lbl->setObjectName( name % "SceneTitleValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString sceneSubject = importer->getSceneSubject();
+	if ( !sceneSubject.isEmpty() )
+	{
+		lbl = new QLabel( tr( "Subject:" ) );
+		lbl->setObjectName( name % "SceneSubjectLbl" );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
+
+		lbl = new QLabel( sceneSubject );
+		lbl->setObjectName( name % "SceneSubjectValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString sceneKeywords = importer->getSceneKeywords();
+	if ( !sceneKeywords.isEmpty() )
+	{
+		lbl = new QLabel( tr( "Keywords:" ) );
+		lbl->setObjectName( name % "SceneKeywordsLbl" );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
+
+		lbl = new QLabel( sceneKeywords );
+		lbl->setObjectName( name % "SceneKeywordsValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString sceneRevision = importer->getSceneRevision();
+	if ( !sceneRevision.isEmpty() )
+	{
+		lbl = new QLabel( tr( "Revision:" ) );
+		lbl->setObjectName( name % "SceneRevisionLbl" );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
+
+		lbl = new QLabel( sceneRevision );
+		lbl->setObjectName( name % "SceneRevisionValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
+	}
+
+	const QString sceneComment = importer->getSceneComment();
+	if ( !sceneComment.isEmpty() )
+	{
+		lbl = new QLabel( tr( "Comment:" ) );
+		lbl->setObjectName( name % "SceneCommentLbl" );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
+
+		lbl = new QLabel( sceneComment );
+		lbl->setObjectName( name % "SceneCommentValueLbl" );
+		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
 	}
 
 	const QString vendor = importer->getOriginalAppVendor();
@@ -2480,13 +2706,14 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	{
 		lbl = new QLabel( tr( "Vendor:" ) );
 		lbl->setObjectName( name % "VendorLbl" );
-		lbl->setAlignment( Qt::AlignRight );
-		fileInfoLyt->addWidget( lbl, row, 0 );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
 
 		lbl = new QLabel( vendor );
 		lbl->setObjectName( name % "VendorValueLbl" );
 		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
-		fileInfoLyt->addWidget( lbl, row++, 1 );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
 	}
 
 	const QString application = QString( "%1 %2" )
@@ -2496,96 +2723,123 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	{
 		lbl = new QLabel( tr( "Application:" ) );
 		lbl->setObjectName( name % "ApplicationLbl" );
-		lbl->setAlignment( Qt::AlignRight );
-		fileInfoLyt->addWidget( lbl, row, 0 );
+		lbl->setAlignment( Qt::AlignRight | Qt::AlignVCenter );
+		sceneInfoLyt->addWidget( lbl, row, 0 );
+		leftLabels.push_back( lbl );
 
 		lbl = new QLabel( application );
 		lbl->setObjectName( name % "ApplicationValueLbl" );
 		lbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
-		fileInfoLyt->addWidget( lbl, row++, 1 );
+		sceneInfoLyt->addWidget( lbl, row++, 1 );
 	}
 
-	fileInfoGBox->setLayout( fileInfoLyt );
-
-	mainLyt->addWidget( fileInfoGBox );
-
-
-	// Import
-	QGroupBox* importOptsGBox = new QGroupBox();
-	importOptsGBox->setObjectName( name % "OptionsGBox" );
-	importOptsGBox->setTitle( tr( "Import Options :" ) );
-
-	QBoxLayout* importOptsLyt = new QVBoxLayout();
-	importOptsLyt->setSpacing( margin );
-	importOptsLyt->setMargin( margin );
-
-	QBoxLayout* animLyt = new QHBoxLayout();
-	animLyt->setMargin( 0 );
-	animLyt->setSpacing( margin );
-
-	QLabel* animTakeLbl = new QLabel( tr( "Take:" ) );
-	animTakeLbl->setObjectName( name % "TakeLbl" );
-	animLyt->addWidget( animTakeLbl );
-
-	m_data->m_animTakeCmb = new QComboBox();
-	m_data->m_animTakeCmb->setObjectName( name % "TakeToImportCmb" );
-	m_data->m_animTakeCmb->addItem( tr( c_none ) );
-	//m_data->m_animTakeCmb->insertSeparator( m_data->m_animTakeCmb->count() );
-	m_data->m_animTakeCmb->addItems( importer->getAnimStackNames() );
-	m_data->m_animTakeCmb->setCurrentIndex( 0 );
-	m_data->m_animTakeCmb->setFixedHeight( btnHeight );
-	animLyt->addWidget( m_data->m_animTakeCmb, 1 );
-
-	importOptsLyt->addLayout( animLyt );
-
-	importOptsGBox->setLayout( importOptsLyt );
-
-	mainLyt->addWidget( importOptsGBox );
-
-	const QString errorList = importer->getErrorList().join( "\n" );
-	if ( !errorList.isEmpty() )
+#if DZ_SDK_4_12_OR_GREATER
+	if ( DzCollapsibleGroupBox* sceneInfoCGBox = qobject_cast<DzCollapsibleGroupBox*>( sceneInfoGBox ) )
 	{
-		// Footer
-		QGroupBox* reportGrp = new QGroupBox();
-		reportGrp->setObjectName( name % "PreImportReportGBox" );
-		reportGrp->setTitle( tr( "Pre-Import Report :" ) );
-
-		QBoxLayout* reportLyt = new QVBoxLayout();
-		reportLyt->setSpacing( margin );
-		reportLyt->setMargin( margin );
-
-		QWidget* preImportWgt = new QWidget();
-		preImportWgt->setObjectName( name % "PreImportReportWgt" );
-
-		QLabel* preImportLbl = new QLabel();
-		preImportLbl->setObjectName( name % "PreImportReportLbl" );
-		preImportLbl->setText( errorList );
-		preImportLbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
-
-		QBoxLayout* preImportLyt = new QVBoxLayout();
-		preImportLyt->setSpacing( margin );
-		preImportLyt->setMargin( margin );
-		preImportLyt->addWidget( preImportLbl );
-		preImportLyt->addStretch();
-		preImportWgt->setLayout( preImportLyt );
-
-		QScrollArea* preImportScroll = new QScrollArea();
-		preImportScroll->setObjectName( name % "PreImportReportScrollArea" );
-		preImportScroll->setWidgetResizable( true );
-		preImportScroll->setWidget( preImportWgt );
-
-		reportLyt->addWidget( preImportScroll );
-
-		reportGrp->setLayout( reportLyt );
-
-		mainLyt->addWidget( reportGrp );
+		sceneInfoCGBox->addLayout( sceneInfoLyt );
 	}
 	else
 	{
-		mainLyt->addStretch( 1 );
+		sceneInfoGBox->setLayout( sceneInfoLyt );
 	}
+#else
+	sceneInfoGBox->setLayout( sceneInfoLyt );
+#endif //DZ_SDK_4_12_OR_GREATER
+
+	mainLyt->addWidget( sceneInfoGBox );
+
+
+	// Properties
+	QGroupBox* propertiesGBox = new QGroupBox( tr( "Properties :" ) );
+	propertiesGBox->setObjectName( name % "PropertiesGBox" );
+
+	QVBoxLayout* propertiesLyt = new QVBoxLayout();
+	propertiesLyt->setSpacing( margin );
+	propertiesLyt->setMargin( margin );
+
+	m_data->m_includeAnimationCbx = new QCheckBox();
+	m_data->m_includeAnimationCbx->setObjectName( name % "IncludeAnimationCbx" );
+	m_data->m_includeAnimationCbx->setText( tr( "Include Animation" ) );
+	propertiesLyt->addWidget( m_data->m_includeAnimationCbx );
+	DzConnect( m_data->m_includeAnimationCbx, SIGNAL(toggled(bool)),
+		importer, SLOT(setIncludeAnimations(bool)) );
+
+	m_data->m_animationTakeCmb = new QComboBox();
+	m_data->m_animationTakeCmb->setObjectName( name % "TakeToImportCmb" );
+	m_data->m_animationTakeCmb->addItem( tr( c_none ) );
+	//m_data->m_animationTakeCmb->insertSeparator( m_data->m_animationTakeCmb->count() );
+	m_data->m_animationTakeCmb->addItems( importer->getAnimStackNames() );
+	m_data->m_animationTakeCmb->setCurrentIndex( 0 );
+	m_data->m_animationTakeCmb->setFixedHeight( btnHeight );
+	m_data->m_animationTakeCmb->setEnabled( false );
+	propertiesLyt->addWidget( m_data->m_animationTakeCmb );
+	DzConnect( m_data->m_animationTakeCmb, SIGNAL(activated(const QString&)),
+		importer, SLOT(setTakeName(const QString&)) );
+
+	DzConnect( m_data->m_includeAnimationCbx, SIGNAL(toggled(bool)),
+		m_data->m_animationTakeCmb, SLOT(setEnabled(bool)) );
+
+	propertiesGBox->setLayout( propertiesLyt );
+
+	mainLyt->addWidget( propertiesGBox );
+
+	// Footer
+	const QString errorList = importer->getErrorList().join( "\n" );
+
+	QGroupBox* reportGrp = new QGroupBox();
+	reportGrp->setObjectName( name % "PreImportReportGBox" );
+	reportGrp->setTitle( tr( "Pre-Import Report :" ) );
+
+	QVBoxLayout* reportLyt = new QVBoxLayout();
+	reportLyt->setSpacing( margin );
+	reportLyt->setMargin( margin );
+
+	QWidget* preImportWgt = new QWidget();
+	preImportWgt->setObjectName( name % "PreImportReportWgt" );
+
+	QLabel* preImportLbl = new QLabel();
+	preImportLbl->setObjectName( name % "PreImportReportLbl" );
+	preImportLbl->setText( !errorList.isEmpty() ? errorList : tr( "Import Ready." ) );
+	preImportLbl->setTextInteractionFlags( Qt::TextBrowserInteraction );
+
+	QVBoxLayout* preImportLyt = new QVBoxLayout();
+	preImportLyt->setSpacing( margin );
+	preImportLyt->setMargin( margin );
+	preImportLyt->addWidget( preImportLbl );
+	preImportLyt->addStretch();
+	preImportWgt->setLayout( preImportLyt );
+
+	QScrollArea* preImportScroll = new QScrollArea();
+	preImportScroll->setObjectName( name % "PreImportReportScrollArea" );
+	preImportScroll->setWidgetResizable( true );
+	preImportScroll->setWidget( preImportWgt );
+
+	reportLyt->addWidget( preImportScroll, 1 );
+
+	reportGrp->setLayout( reportLyt );
+
+	mainLyt->addWidget( reportGrp, 10 ); // stretch factor must be > scene info
 
 	setLayout( mainLyt );
+
+	// --------
+
+	int leftWidth = 0;
+	for ( int i = 0, n = leftLabels.count(); i < n; ++i )
+	{
+		lbl = leftLabels.at( i );
+		const int minWidth = lbl->minimumSizeHint().width();
+		if ( minWidth > leftWidth )
+		{
+			leftWidth = minWidth;
+		}
+	}
+
+	for ( int i = 0, n = leftLabels.count(); i < n; ++i )
+	{
+		lbl = leftLabels.at( i );
+		lbl->setFixedWidth( leftWidth );
+	}
 
 	DzFbxImportFrame::resetOptions();
 }
@@ -2605,12 +2859,13 @@ void DzFbxImportFrame::setOptions( const DzFileIOSettings* options, const QStrin
 		return;
 	}
 
+	m_data->m_includeAnimationCbx->setChecked( options->getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations ) );
 	const QString take = options->getStringValue( c_optTake, QString() );
-	for ( int i = 0; i < m_data->m_animTakeCmb->count(); i++ )
+	for ( int i = 0; i < m_data->m_animationTakeCmb->count(); i++ )
 	{
-		if ( m_data->m_animTakeCmb->itemText( i ) == take )
+		if ( m_data->m_animationTakeCmb->itemText( i ) == take )
 		{
-			m_data->m_animTakeCmb->setCurrentIndex( i );
+			m_data->m_animationTakeCmb->setCurrentIndex( i );
 			break;
 		}
 	}
@@ -2626,7 +2881,8 @@ void DzFbxImportFrame::getOptions( DzFileIOSettings* options ) const
 		return;
 	}
 
-	const QString animTake = m_data->m_animTakeCmb->currentText();
+	options->setBoolValue( c_optIncAnimations, m_data->m_includeAnimationCbx->isChecked() );
+	const QString animTake = m_data->m_animationTakeCmb->currentText();
 	options->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
 }
 

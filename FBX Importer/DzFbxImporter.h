@@ -79,12 +79,26 @@ public:
 	//
 
 	QString		getFileVersion() const;
+	QString		getFileCreator() const;
+	QString		getFileFormat() const;
+
 	QString		getSceneAuthor() const;
+	QString		getSceneTitle() const;
+	QString		getSceneSubject() const;
+	QString		getSceneKeywords() const;
+	QString		getSceneRevision() const;
+	QString		getSceneComment() const;
 	QString		getOriginalAppVendor() const;
 	QString		getOriginalAppName() const;
 	QString		getOriginalAppVersion() const;
+
 	QStringList	getAnimStackNames() const;
 	QStringList	getErrorList() const;
+
+public slots:
+
+	void		setIncludeAnimations( bool yesNo );
+	void		setTakeName( const QString &name );
 
 protected:
 
@@ -188,16 +202,26 @@ private:
 	bool				m_fbxRead;
 	FbxManager*			m_fbxManager;
 	FbxScene*			m_fbxScene;
+
 	QStringList			m_animStackNames;
 	FbxAnimStack*		m_fbxAnimStack;
 	FbxAnimLayer*		m_fbxAnimLayer;
-	FbxString			m_fbxSceneAuthor;
-	FbxString			m_fbxOrigAppVendor;
-	FbxString			m_fbxOrigAppName;
-	FbxString			m_fbxOrigAppVersion;
+
 	int					m_fbxFileMajor;
 	int					m_fbxFileMinor;
 	int					m_fbxFileRevision;
+	FbxString			m_fbxFileCreator;
+	int					m_fbxFileBinary;
+
+	FbxString			m_fbxSceneAuthor;
+	FbxString			m_fbxSceneTitle;
+	FbxString			m_fbxSceneSubject;
+	FbxString			m_fbxSceneKeywords;
+	FbxString			m_fbxSceneRevision;
+	FbxString			m_fbxSceneComment;
+	FbxString			m_fbxOrigAppVendor;
+	FbxString			m_fbxOrigAppName;
+	FbxString			m_fbxOrigAppVersion;
 
 	QVector<Skinning>		m_skins;
 	QMap<FbxNode*, DzNode*>	m_nodeMap;
@@ -211,7 +235,8 @@ private:
 
 	QVector<DzMaterial*>	m_dsMaterials;
 
-	QString					m_takeName;
+	bool				m_includeAnimations;
+	QString				m_takeName;
 
 	Node*		m_root;
 };
