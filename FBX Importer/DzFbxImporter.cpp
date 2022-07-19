@@ -43,6 +43,7 @@
 #endif //DZ_SDK_4_12_OR_GREATER
 #include "dzdefaultmaterial.h"
 #include "dzenumproperty.h"
+#include "dzfacegroup.h"
 #include "dzfacetmesh.h"
 #include "dzfacetshape.h"
 #include "dzfigure.h"
@@ -82,6 +83,7 @@ const QString c_optTake( "Take" );
 
 const QString c_optIncAnimations( "IncludeAnimations" );
 
+const QString c_optIncPolygonSets( "IncludePolygonSets" );
 const QString c_optIncPolygonGroups( "IncludePolygonGroups" );
 
 const QString c_optRunSilent( "RunSilent" );
@@ -89,6 +91,7 @@ const QString c_optRunSilent( "RunSilent" );
 // settings default values
 const bool c_defaultIncludeAnimations = false;
 
+const bool c_defaultIncludePolygonSets = true;
 const bool c_defaultIncludePolygonGroups = false;
 
 // functions
@@ -180,6 +183,7 @@ DzFbxImporter::DzFbxImporter() :
 	m_dsEndTime( 0 ),
 	m_suppressRigErrors( false ),
 	m_includeAnimations( false ),
+	m_includePolygonSets( c_defaultIncludePolygonSets ),
 	m_includePolygonGroups( c_defaultIncludePolygonGroups ),
 	m_root( NULL )
 {}
@@ -258,6 +262,7 @@ void DzFbxImporter::getDefaultOptions( DzFileIOSettings* options ) const
 	options->setBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	options->setStringValue( c_optTake, QString() );
 
+	options->setBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets );
 	options->setBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
 
 	options->setIntValue( c_optRunSilent, 0 );
@@ -748,6 +753,7 @@ DzError DzFbxImporter::read( const QString &filename, const DzFileIOSettings* im
 	m_includeAnimations = options.getBoolValue( c_optIncAnimations, c_defaultIncludeAnimations );
 	m_takeName = options.getStringValue( c_optTake, QString() );
 
+	m_includePolygonSets = options.getBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets );
 	m_includePolygonGroups = options.getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups );
 
 #if DZ_SDK_4_12_OR_GREATER
@@ -941,6 +947,13 @@ void DzFbxImporter::setIncludeAnimations( bool yesNo )
 void DzFbxImporter::setTakeName( const QString &name )
 {
 	m_takeName = name;
+}
+
+/**
+**/
+void DzFbxImporter::setIncludePolygonSets( bool yesNo )
+{
+	m_includePolygonSets = yesNo;
 }
 
 /**
@@ -1987,6 +2000,213 @@ void DzFbxImporter::fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFa
 	}
 }
 
+#if !DZ_SDK_4_12_OR_GREATER
+static void selectFacetsByIndexList( DzFacetMesh* dsMesh, DzFaceGroup* dsFaceGroup )
+{
+	const int nFacets = dsMesh->getNumFacets();
+	const int* faceGrpIndices = dsFaceGroup->getIndicesPtr();
+	unsigned char* facetFlags = dsMesh->getFacetFlagsPtr();
+	for ( int i = 0, n = dsFaceGroup->count(); i < n; ++i )
+	{
+		const int faceGrpIdx = faceGrpIndices[i];
+		if ( faceGrpIdx >= nFacets )
+		{
+			break;
+		}
+
+		if ( facetFlags[faceGrpIdx] & DZ_HIDDEN_FACE_BIT )
+		{
+			continue;
+		}
+
+		facetFlags[faceGrpIdx] |= DZ_SELECTED_FACE_BIT;
+	}
+}
+#endif
+
+/**
+	Builds face groups, or polygon selection sets, from polygon selection set
+	data in the FBX.
+
+	@param dsMeshNode	The node that provides the mesh with the polygons we are
+						interested in. Used to validate that a given selection
+						set is intended for 'this' object.
+	@param dsMesh		The facet mesh that we will alter the face group(s) of.
+	@param dsShape		The shape to create a facet selection group on; depending
+						on the active options.
+
+	@sa fbxImportMesh()
+**/
+void DzFbxImporter::fbxImportPolygonSets( DzNode* dsMeshNode, DzFacetMesh* dsMesh, DzFacetShape* dsShape )
+{
+	if ( !m_includePolygonSets )
+	{
+		return;
+	}
+
+	const bool asFaceGroups = !m_includePolygonGroups;
+
+	for ( int i = 0, n = m_fbxScene->GetMemberCount<FbxSelectionSet>(); i < n; i++ )
+	{
+		FbxSelectionSet* fbxSelectionSet = m_fbxScene->GetMember<FbxSelectionSet>( i );
+		if ( !fbxSelectionSet )
+		{
+			continue;
+		}
+
+		const QString fbxSelSetName( fbxSelectionSet->GetName() );
+		QStringList fbxSelSetNameParts = fbxSelSetName.split( "__" );
+		const QString dsFaceGroupName( fbxSelSetNameParts.first() );
+		const QString dsMeshNodeName( fbxSelSetNameParts.last() );
+		if ( dsMeshNodeName == dsFaceGroupName
+			|| dsMeshNodeName != dsMeshNode->getName() )
+		{
+			continue;
+		}
+
+		FbxArray<FbxSelectionNode*> fbxSelectionNodeList;
+		FbxArray<FbxObject*> fbxDirectObjectList;
+		fbxSelectionSet->GetSelectionNodesAndDirectObjects( fbxSelectionNodeList, fbxDirectObjectList );
+
+		// directly connected objects
+		for ( int j = 0, m = fbxDirectObjectList.GetCount(); j < m; j++ )
+		{
+			const FbxObject* fbxObject = fbxDirectObjectList[j];
+			const QString str( fbxObject->GetName() );
+			Q_UNUSED( str );
+		}
+
+		// selection nodes
+		for ( int j = 0, m = fbxSelectionNodeList.GetCount(); j < m; j++ )
+		{
+			FbxSelectionNode* fbxSelectionNode = fbxSelectionNodeList[j];
+			if ( !fbxSelectionNode )
+			{
+				continue;
+			}
+
+			FbxArray<int> fbxFacetIndices;
+			fbxSelectionSet->GetFaceSelection( fbxSelectionNode, fbxFacetIndices );
+
+			if ( fbxFacetIndices.GetCount() < 1 )
+			{
+				continue;
+			}
+
+			if ( asFaceGroups )
+			{
+				const bool created = dsMesh->createFaceGroup( dsFaceGroupName );
+				Q_UNUSED( created )
+
+				const int numFacetIndices = fbxFacetIndices.GetCount();
+
+				// create a temporary list of facet indices to use for selection
+				DzTSharedPointer<DzFaceGroup> dsFaceGroup( new DzFaceGroup( dsFaceGroupName ) );
+				dsFaceGroup->preSizeArray( numFacetIndices );
+				for ( int k = 0; k < numFacetIndices; k++ )
+				{
+					dsFaceGroup->addIndex( fbxFacetIndices.GetAt( k ) );
+				}
+
+				// use facet selection state to create face groups;
+				// doing it this way more easily handles exclusivity
+#if DZ_SDK_4_12_OR_GREATER
+				dsMesh->beginFacetSelectionEdit();
+#else
+				// DzFacetMesh::beginFacetSelectionEdit() is not in the 4.5 SDK,
+				// so we attempt to use the meta-object to call the method - since 4.6.3.39
+
+				bool im = QMetaObject::invokeMethod( dsMesh, "beginFacetSelectionEdit" );
+				assert( im );
+#endif
+
+				dsMesh->deselectAllFacets();
+
+#if DZ_SDK_4_12_OR_GREATER
+				dsMesh->selectFacetsByIndexList( dsFaceGroup, true );
+#else
+				// DzFacetMesh::selectFacetsByIndexList() is not in the 4.5 SDK,
+				// so we attempt to use the meta-object to call the method - since 4.6.3.39.
+				// If that fails we fall back to doing it ourselves
+
+				if ( !QMetaObject::invokeMethod( dsMesh, "selectFacetsByIndexList",
+						Q_ARG( const DzIndexList*, dsFaceGroup ), Q_ARG( bool, true) ) )
+				{
+					selectFacetsByIndexList( dsMesh, dsFaceGroup );
+				}
+#endif
+
+				dsMesh->addSelectedFacetsToGroup( dsFaceGroupName );
+				dsMesh->deselectAllFacets();
+
+#if DZ_SDK_4_12_OR_GREATER
+				dsMesh->finishFacetSelectionEdit();
+#else
+				// DzFacetMesh::beginFacetSelectionEdit() is not in the 4.5 SDK,
+				// so we attempt to use the meta-object to call the method - since 4.6.3.39
+
+				im = QMetaObject::invokeMethod( dsMesh, "finishFacetSelectionEdit" );
+				assert( im );
+#endif
+			}
+			else // as a selection group
+			{
+#if DZ_SDK_4_12_OR_GREATER
+				DzSelectionGroup* dsSelectionGrp = dsShape->findFacetSelectionGroup( dsFaceGroupName, true );
+				for ( int k = 0; k < fbxFacetIndices.GetCount(); k++ )
+				{
+					dsSelectionGrp->addIndex( fbxFacetIndices.GetAt( k ) );
+				}
+#else
+				// DzSelectionGroup is not in the 4.5 SDK, but its superclass
+				// DzIndexList is and it provides DzIndexList::addIndex()
+
+				// DzFacetShape::findFacetSelectionGroup() is not in the 4.5 SDK,
+				// so we attempt to use the meta-object to call the method - since 4.6.3.39
+
+				DzIndexList* dsSelectionGrp = NULL;
+				if ( QMetaObject::invokeMethod( dsShape, "findFacetSelectionGroup",
+						Q_RETURN_ARG( DzIndexList*, dsSelectionGrp ),
+						Q_ARG( const QString&, dsFaceGroupName ), Q_ARG( bool, true ) ) )
+				{
+					for ( int k = 0, p = fbxFacetIndices.GetCount(); k < p; k++ )
+					{
+						dsSelectionGrp->addIndex( fbxFacetIndices.GetAt( k ) );
+					}
+				}
+#endif
+			}
+		}
+	}
+
+	// clean up empty face groups
+	for ( int i = dsMesh->getNumFaceGroups() - 1; i >= 0; --i )
+	{
+		DzFaceGroup* dsFaceGroup = dsMesh->getFaceGroup( i );
+		if ( dsFaceGroup->count() > 0 )
+		{
+			continue;
+		}
+
+#if DZ_SDK_4_12_OR_GREATER
+		const bool removed = dsMesh->removeFaceGroup( dsFaceGroup->getName() );
+		Q_UNUSED( removed )
+#else
+		bool removed = false;
+		// DzFacetMesh::removeFaceGroup() is not in the 4.5 SDK, so we attempt
+		// to use the meta-object to call the method. If this fails, we attempt to
+		// use the deprecated method.
+
+		if ( !QMetaObject::invokeMethod( dsMesh, "removeFaceGroup",
+			Q_RETURN_ARG( bool, removed ), Q_ARG( QString, dsFaceGroup->getName() )) )
+		{
+			removed = dsMesh->removeFacetGroup( dsFaceGroup->getName() );
+		}
+		Q_UNUSED( removed )
+#endif
+	}
+}
+
 /**
 **/
 void DzFbxImporter::fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool matsAllSame, QMap<QPair<int, int>, int> &edgeMap )
@@ -2472,6 +2692,8 @@ void DzFbxImporter::fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshN
 	dsObject->addShape( dsShape );
 	dsMeshNode->setObject( dsObject );
 
+	fbxImportPolygonSets( dsMeshNode, dsMesh, dsShape );
+
 	fbxImportMeshModifiers( node, fbxMesh, dsObject, dsFigure, numVertices, fbxVertices );
 }
 
@@ -2525,6 +2747,7 @@ struct DzFbxImportFrame::Data
 		m_importer( importer ),
 		m_includeAnimationCbx( NULL ),
 		m_animationTakeCmb( NULL ),
+		m_includePolygonSetsCbx( NULL ),
 		m_includePolygonGroupsCbx( NULL )
 	{}
 
@@ -2533,6 +2756,7 @@ struct DzFbxImportFrame::Data
 	QCheckBox*		m_includeAnimationCbx;
 	QComboBox*		m_animationTakeCmb;
 
+	QCheckBox*		m_includePolygonSetsCbx;
 	QCheckBox*		m_includePolygonGroupsCbx;
 };
 
@@ -2814,6 +3038,11 @@ DzFbxImportFrame::DzFbxImportFrame( DzFbxImporter* importer ) :
 	geometryLyt->setSpacing( margin );
 	geometryLyt->setMargin( margin );
 
+	m_data->m_includePolygonSetsCbx = new QCheckBox();
+	m_data->m_includePolygonSetsCbx->setObjectName( name % "IncludePolygonSetsCbx" );
+	m_data->m_includePolygonSetsCbx->setText( tr( "Include Polygon Sets" ) );
+	geometryLyt->addWidget( m_data->m_includePolygonSetsCbx );
+
 	m_data->m_includePolygonGroupsCbx = new QCheckBox();
 	m_data->m_includePolygonGroupsCbx->setObjectName( name % "IncludePolygonGroupsCbx" );
 	m_data->m_includePolygonGroupsCbx->setText( tr( "Include Polygon Groups" ) );
@@ -2910,6 +3139,7 @@ void DzFbxImportFrame::setOptions( const DzFileIOSettings* options, const QStrin
 		}
 	}
 
+	m_data->m_includePolygonSetsCbx->setChecked( options->getBoolValue( c_optIncPolygonSets, c_defaultIncludePolygonSets ) );
 	m_data->m_includePolygonGroupsCbx->setChecked( options->getBoolValue( c_optIncPolygonGroups, c_defaultIncludePolygonGroups ) );
 }
 
@@ -2927,6 +3157,7 @@ void DzFbxImportFrame::getOptions( DzFileIOSettings* options ) const
 	const QString animTake = m_data->m_animationTakeCmb->currentText();
 	options->setStringValue( c_optTake, animTake != tr( c_none ) ? animTake : QString() );
 
+	options->setBoolValue( c_optIncPolygonSets, m_data->m_includePolygonSetsCbx->isChecked() );
 	options->setBoolValue( c_optIncPolygonGroups, m_data->m_includePolygonGroupsCbx->isChecked() );
 }
 

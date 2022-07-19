@@ -100,6 +100,7 @@ public slots:
 	void		setIncludeAnimations( bool yesNo );
 	void		setTakeName( const QString &name );
 
+	void		setIncludePolygonSets( bool yesNo );
 	void		setIncludePolygonGroups( bool yesNo );
 
 protected:
@@ -180,6 +181,7 @@ private:
 	void		fbxImportUVs( FbxMesh* fbxMesh, DzFacetMesh* dsMesh );
 	void		fbxImportSubdVertexWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool &enableSubd );
 	void		fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFacetMesh* dsMesh, DzFacetShape* dsShape, bool &matsAllSame );
+	void		fbxImportPolygonSets( DzNode* dsMeshNode, DzFacetMesh* dsMesh, DzFacetShape* dsShape );
 	void		fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool matsAllSame, QMap<QPair<int, int>, int> &edgeMap );
 	void		fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, QMap<QPair<int, int>, int> edgeMap, bool &enableSubd );
 	void		fbxImportSkinBinding( FbxDeformer* fbxDeformer, Node* node, DzFigure* dsFigure, int numVertices );
@@ -240,6 +242,7 @@ private:
 	bool				m_includeAnimations;
 	QString				m_takeName;
 
+	bool				m_includePolygonSets;
 	bool				m_includePolygonGroups;
 
 	Node*		m_root;
