@@ -20,7 +20,7 @@
 
 // Version number for the FBX Importer plug-in
 #define PLUGIN_MAJOR	1
-#define PLUGIN_MINOR	2
+#define PLUGIN_MINOR	4
 #define PLUGIN_REV		1
 #define PLUGIN_BUILD	0
 
