@@ -178,8 +178,9 @@ private:
 	};
 
 
+	void		fbxPreImportAnimationStack();
+	void		fbxPreImportGraph( FbxNode* fbxNode );
 	void		fbxPreImport();
-	void		fbxPreImportRecurse( FbxNode* fbxNode );
 
 	DzTexture*	toTexture( FbxProperty fbxProperty );
 
@@ -199,7 +200,6 @@ private:
 	void		applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale = 1 );
 
 	void		fbxImportGraph( Node* node );
-	void		fbxImportSkin( Node* node );
 	void		fbxImportAnim( Node* node );
 
 	void		updateSelectionMap( Node* node );

@@ -1347,9 +1347,10 @@ static void setNodePresentation( DzNode* dsNode, FbxNode* fbxNode )
 	}
 }
 
-static bool _allClose( double a, double b, double c )
+static bool isFuzzyClose( double a, double b, double c )
 {
-	if ( qAbs( a - b ) > 0.0000000001f || qAbs( a - c ) > 0.0000000001f )
+	if ( qAbs( a - b ) > 0.0000000001f
+		|| qAbs( a - c ) > 0.0000000001f )
 	{
 		return false;
 	}
@@ -1359,113 +1360,118 @@ static bool _allClose( double a, double b, double c )
 
 /**
 **/
-void DzFbxImporter::fbxPreImport()
+void DzFbxImporter::fbxPreImportAnimationStack()
 {
 	for ( int i = 0, n = m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i < n; i++ )
 	{
 		const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
-		const int numLayers = animStack->GetMemberCount<FbxAnimLayer>();
 
 		const QString stackName( animStack->GetName() );
 
+		const int numLayers = animStack->GetMemberCount<FbxAnimLayer>();
 		if ( numLayers == 0 )
 		{
-			m_errorList << "Animation: " % stackName % " has no layers.";
+			m_errorList << "Animation: \"" % stackName % "\" has no layers.";
 		}
 		else if ( numLayers > 1 )
 		{
-			m_errorList << "Animation: " % stackName % " has multiple layers.";
+			m_errorList << "Animation: \"" % stackName % "\" has multiple layers.";
 		}
 
 		m_animStackNames.push_back( stackName );
-	}
-
-	for ( int i = 0; i < m_fbxScene->GetRootNode()->GetChildCount(); i++ )
-	{
-		fbxPreImportRecurse( m_fbxScene->GetRootNode()->GetChild( i ) );
 	}
 }
 
 /**
 **/
-void DzFbxImporter::fbxPreImportRecurse( FbxNode* fbxNode )
+void DzFbxImporter::fbxPreImportGraph( FbxNode* fbxNode )
 {
+	const QString nodeName( fbxNode->GetName() );
+
 	if ( !m_suppressRigErrors )
 	{
-		// pre/post-rotation must match
+		// pre (Joint Orient)/post (Rotate Axis) rotation must match
 		if ( fbxNode->GetPreRotation( FbxNode::eSourcePivot ) != fbxNode->GetPostRotation( FbxNode::eSourcePivot ) )
 		{
-			m_errorList << "Rigging: Pre and post rotation mismatch for " % QString( fbxNode->GetName() );
+			m_errorList << "Rigging: Pre/Post rotation mismatch: " % nodeName;
 		}
 
 		// scale must be uniform
-		if ( !_allClose( fbxNode->LclScaling.Get()[0], fbxNode->LclScaling.Get()[1], fbxNode->LclScaling.Get()[2] ) )
+		FbxDouble3 fbxScaling = fbxNode->LclScaling.Get();
+		if ( !isFuzzyClose( fbxScaling[0], fbxScaling[1], fbxScaling[2] ) )
 		{
-			m_errorList << "Rigging: Non-uniform scale detected for " % QString( fbxNode->GetName() );
+			m_errorList << "Rigging: Non-uniform scale: " % nodeName;
 		}
-	}
 
-	// mesh
-	if ( const FbxMesh* fbxMesh = fbxNode->GetMesh() )
-	{
-		// mesh deformers
-		for ( int i = 0, n = fbxMesh->GetDeformerCount(); i < n; i++ )
+		// mesh
+		if ( const FbxMesh* fbxMesh = fbxNode->GetMesh() )
 		{
-			// we are only concerned with skinning
-
-			FbxDeformer* deformer = fbxMesh->GetDeformer( i );
-			if ( !deformer->GetClassId().Is( FbxSkin::ClassId ) )
-			{
-				continue;
-			}
-
-			if ( !m_suppressRigErrors )
+			// we are only concerned with skinning at the moment
+			const int numSkins = fbxMesh->GetDeformerCount( FbxDeformer::eSkin );
+			for ( int i = 0; i < numSkins; i++ )
 			{
 				// skinning weights must be linked to a bone
 
-				FbxSkin* fbxSkin = static_cast< FbxSkin* >( deformer );
+				FbxSkin* fbxSkin = static_cast<FbxSkin*>( fbxMesh->GetDeformer( i ) );
 				for ( int j = 0, m = fbxSkin->GetClusterCount(); j < m; j++ )
 				{
 					FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
-					if ( !fbxClusterNode || !fbxClusterNode->GetSkeleton() )
+					if ( fbxClusterNode && fbxClusterNode->GetSkeleton() )
 					{
-						m_errorList << "Rigging: Cluster link references a non bone: " % QString( fbxClusterNode->GetName() );
+						continue;
 					}
+
+					m_errorList << "Rigging: Cluster linked to non-bone: " % QString( fbxClusterNode->GetName() );
 				}
 			}
 		}
-	}
 
-	if ( !m_suppressRigErrors )
-	{
 		// "bone chains"
 		if ( const FbxSkeleton* fbxSkeleton = fbxNode->GetSkeleton() )
 		{
 			// a "bone chain" must ultimately start with a "root"; if the 'current'
 			// skeleton node is not the root, it should have a parent that is
 
-			if ( fbxSkeleton->GetSkeletonType() != FbxSkeleton::eRoot )
+			const char* skelTypes[] = { "Root", "Limb", "Limb Node", "Effector" };
+
+			FbxSkeleton::EType skelType = fbxSkeleton->GetSkeletonType();
+			switch ( skelType )
 			{
-				FbxNode* fbxParentNode = fbxNode->GetParent();
-				if ( !fbxParentNode )
+			default:
+			case FbxSkeleton::eRoot:
+				break;
+			case FbxSkeleton::eLimb:
+			case FbxSkeleton::eLimbNode:
+			case FbxSkeleton::eEffector:
 				{
-					m_errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
-				}
-				else
-				{
-					const FbxSkeleton* fbxParentSkeleton = fbxParentNode->GetSkeleton();
-					if ( !fbxParentSkeleton )
+					FbxNode* fbxParentNode = fbxNode->GetParent();
+					if ( !fbxParentNode
+						|| !fbxParentNode->GetSkeleton() )
 					{
-						m_errorList << "Rigging: Bone chain without skeleton root: " % QString( fbxNode->GetName() );
+						m_errorList << "Rigging: Bone chain type incorrect - " % QString( skelTypes[skelType] ) % ": " % nodeName;
 					}
 				}
+				break;
 			}
 		}
 	}
 
-	for ( int i = 0; i < fbxNode->GetChildCount(); i++ )
+	for ( int i = 0, n = fbxNode->GetChildCount(); i < n; i++ )
 	{
-		fbxPreImportRecurse( fbxNode->GetChild( i ) );
+		fbxPreImportGraph( fbxNode->GetChild( i ) );
+	}
+}
+
+/**
+**/
+void DzFbxImporter::fbxPreImport()
+{
+	fbxPreImportAnimationStack();
+
+	FbxNode* fbxRootNode = m_fbxScene->GetRootNode();
+	for ( int i = 0, n = fbxRootNode->GetChildCount(); i < n; i++ )
+	{
+		fbxPreImportGraph( fbxRootNode->GetChild( i ) );
 	}
 }
 
@@ -1759,16 +1765,6 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 		{
 			setNodeSceneID( node->dsNode, node->fbxNode );
 		}
-	}
-}
-
-/**
-**/
-void DzFbxImporter::fbxImportSkin( Node* node )
-{
-	for ( int i = 0; i < node->children.count(); i++ )
-	{
-		fbxImportSkin( node->children[i] );
 	}
 }
 
