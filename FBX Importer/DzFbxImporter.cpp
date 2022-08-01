@@ -1500,8 +1500,6 @@ void DzFbxImporter::fbxPreImport()
 **/
 void DzFbxImporter::fbxImportGraph( Node* node )
 {
-	DzNode* dsMeshNode = NULL;
-
 	if ( node == m_root )
 	{
 		for ( int i = 0; i < node->fbxNode->GetChildCount(); i++ )
@@ -1518,6 +1516,8 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 
 		return;
 	}
+
+	DzNode* dsMeshNode = NULL;
 
 	const FbxNull* fbxNull = node->fbxNode->GetNull();
 	if ( fbxNull || !node->fbxNode->GetNodeAttribute() )
@@ -1566,18 +1566,6 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 			break;
 		case FbxNodeAttribute::eMesh:
 			{
-				const FbxMesh* fbxMesh = node->fbxNode->GetMesh();
-				bool hasSkin = false;
-				for ( int i = 0; i < fbxMesh->GetDeformerCount(); i++ )
-				{
-					const FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( i );
-					if ( fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
-					{
-						hasSkin = true;
-						break;
-					}
-				}
-
 				const QString fbxNodeName( node->fbxNode->GetName() );
 				if ( node->dsParent &&
 					!node->dsParent->getObject() &&
@@ -1588,7 +1576,8 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 				}
 				else
 				{
-					if ( hasSkin )
+					const FbxMesh* fbxMesh = node->fbxNode->GetMesh();
+					if ( fbxMesh->GetDeformerCount( FbxDeformer::eSkin ) > 0 )
 					{
 						node->dsNode = createFigure();
 						node->collapseTranslation = true;
