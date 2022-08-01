@@ -572,11 +572,14 @@ void DzFbxImporter::fbxImport()
 		QVector<DzBone*> dsBones;
 		for ( int i = 0; i < m_skins.size(); i++ )
 		{
-			const Node* node = m_skins[i].node;
+			Skinning skinning = m_skins[i];
+
+			const Node* node = skinning.node;
 			Q_UNUSED( node )
-			FbxSkin* fbxSkin = m_skins[i].fbxSkin;
-			DzFigure* dsFigure = m_skins[i].dsFigure;
-			const int numVertices = m_skins[i].numVertices;
+
+			FbxSkin* fbxSkin = skinning.fbxSkin;
+			DzFigure* dsFigure = skinning.dsFigure;
+			const int numVertices = skinning.numVertices;
 
 			DzSkinBinding* dsSkin = dsFigure->getSkinBinding();
 
@@ -609,11 +612,14 @@ void DzFbxImporter::fbxImport()
 				continue;
 			}
 
-			DzSkeleton* crossSkeleton = NULL;
-			for ( int j = 0; j < fbxSkin->GetClusterCount(); j++ )
+			const int numClusters = fbxSkin->GetClusterCount();
+
+			DzSkeleton* dsBaseSkeleton = NULL;
+
+			for ( int j = 0; j < numClusters; j++ )
 			{
 				FbxCluster* fbxCluster = fbxSkin->GetCluster( j );
-				DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap[fbxCluster->GetLink()] );
+				DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap.value( fbxCluster->GetLink() ) );
 				if ( !dsBone )
 				{
 					continue;
@@ -621,22 +627,22 @@ void DzFbxImporter::fbxImport()
 
 				if ( !isChildNode( dsBone, dsFigure ) )
 				{
-					crossSkeleton = dsBone->getSkeleton();
+					dsBaseSkeleton = dsBone->getSkeleton();
 				}
 			}
 
-			if ( crossSkeleton )
+			if ( dsBaseSkeleton )
 			{
-				replicateSkeleton( crossSkeleton, m_skins[i] );
+				replicateSkeleton( dsBaseSkeleton, skinning );
 			}
 
 
 			DzWeightMapList maps;
 			QVector<MapConversion> mapConversions;
-			for ( int j = 0; j < fbxSkin->GetClusterCount(); j++ )
+			for ( int j = 0; j < numClusters; j++ )
 			{
 				FbxCluster* fbxCluster = fbxSkin->GetCluster( j );
-				DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap[fbxCluster->GetLink()] );
+				DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap.value( fbxCluster->GetLink() ) );
 				if ( !dsBone )
 				{
 					continue;
@@ -730,11 +736,11 @@ void DzFbxImporter::fbxImport()
 			assert( im );
 #endif
 
-			if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && m_skins[i].m_blendWeights )
+			if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && skinning.m_blendWeights )
 			{
 #if DZ_SDK_4_12_OR_GREATER
 				dsSkin->setBindingMode( DzSkinBinding::Blended );
-				dsSkin->setBlendMap( m_skins[i].m_blendWeights );
+				dsSkin->setBlendMap( skinning.m_blendWeights );
 				dsSkin->setBlendMode( DzSkinBinding::BlendLinearDualQuat );
 #else
 				// DzSkinBinding::setBindingMode(), DzSkinBinding::setBlendMap(),
@@ -746,7 +752,7 @@ void DzFbxImporter::fbxImport()
 				assert( im );
 
 				im = QMetaObject::invokeMethod( dsSkin, "setBlendMap",
-					Q_ARG( DzWeightMap*, m_skins[i].m_blendWeights.operator->() ) );
+					Q_ARG( DzWeightMap*, skinning.m_blendWeights.operator->() ) );
 				assert( im );
 
 				im = QMetaObject::invokeMethod( dsSkin, "setBlendMode",
@@ -1062,35 +1068,35 @@ QStringList DzFbxImporter::getErrorList() const
 
 /**
 **/
-void DzFbxImporter::replicateSkeleton( DzSkeleton* crossSkeleton, Skinning &skinning )
+void DzFbxImporter::replicateSkeleton( DzSkeleton* dsBaseSkeleton, const Skinning &skinning )
 {
 	Node* node = skinning.node;
 	DzSkeleton* dsSkeleton = qobject_cast<DzSkeleton*>( node->dsNode );
-
 	if ( !dsSkeleton )
 	{
 		return;
 	}
 
-	Node* crossNode = m_root->find( crossSkeleton );
+	const Node* baseNode = m_root->find( dsBaseSkeleton );
 
-	for ( int i = 0; i < crossNode->children.count(); i++ )
+	for ( int i = 0, n = baseNode->children.count(); i < n; i++ )
 	{
-		Node* crossChild = crossNode->children[i];
-		if ( crossChild->fbxNode->GetNodeAttribute() && crossChild->fbxNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eMesh )
+		const Node* baseChild = baseNode->children.at( i );
+		const FbxNodeAttribute* fbxBaseNodeAttr = baseChild->fbxNode->GetNodeAttribute();
+		if ( fbxBaseNodeAttr && fbxBaseNodeAttr->GetAttributeType() == FbxNodeAttribute::eMesh )
 		{
 			continue;
 		}
 
 		Node* child = new Node();
 		child->setParent( node );
-		child->fbxNode = crossChild->fbxNode;
+		child->fbxNode = baseChild->fbxNode;
 		child->dsParent = node->dsNode;
 
 		fbxImportGraph( child );
 	}
 
-	dsSkeleton->setFollowTarget( crossSkeleton );
+	dsSkeleton->setFollowTarget( dsBaseSkeleton );
 }
 
 static DzVec3 toVec3( FbxVector4 v )

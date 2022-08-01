@@ -204,7 +204,7 @@ private:
 
 	void		updateSelectionMap( Node* node );
 
-	void		replicateSkeleton( DzSkeleton* crossSkeleton, Skinning &skinning );
+	void		replicateSkeleton( DzSkeleton* dsBaseSkeleton, const Skinning &skinning );
 
 	void		fbxRead( const QString &filename );
 	void		fbxImport();
