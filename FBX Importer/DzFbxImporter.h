@@ -207,6 +207,8 @@ private:
 	void		replicateSkeleton( DzSkeleton* dsBaseSkeleton, const Skinning &skinning );
 
 	void		fbxRead( const QString &filename );
+	void		fbxPickAnimation();
+	void		fbxImportSkinning();
 	void		fbxImport();
 	void		fbxCleanup();
 

@@ -524,7 +524,7 @@ void DzFbxImporter::fbxRead( const QString &filename )
 
 /**
 **/
-void DzFbxImporter::fbxImport()
+void DzFbxImporter::fbxPickAnimation()
 {
 	if ( m_includeAnimations && !m_takeName.isEmpty() )
 	{
@@ -562,26 +562,25 @@ void DzFbxImporter::fbxImport()
 			}
 		}
 	}
+}
 
-	//if ( false )
+/**
+**/
+void DzFbxImporter::fbxImportSkinning()
+{
+	QVector<DzBone*> dsBones;
+	for ( int i = 0; i < m_skins.size(); i++ )
 	{
-		m_root = new Node();
-		m_root->fbxNode = m_fbxScene->GetRootNode();
-		fbxImportGraph( m_root );
+		Skinning skinning = m_skins[i];
 
-		QVector<DzBone*> dsBones;
-		for ( int i = 0; i < m_skins.size(); i++ )
-		{
-			Skinning skinning = m_skins[i];
+		const Node* node = skinning.node;
+		Q_UNUSED( node )
 
-			const Node* node = skinning.node;
-			Q_UNUSED( node )
+		FbxSkin* fbxSkin = skinning.fbxSkin;
+		DzFigure* dsFigure = skinning.dsFigure;
+		const int numVertices = skinning.numVertices;
 
-			FbxSkin* fbxSkin = skinning.fbxSkin;
-			DzFigure* dsFigure = skinning.dsFigure;
-			const int numVertices = skinning.numVertices;
-
-			DzSkinBinding* dsSkin = dsFigure->getSkinBinding();
+		DzSkinBinding* dsSkin = dsFigure->getSkinBinding();
 
 #if DZ_SDK_4_12_OR_GREATER
 			if ( dsSkin
@@ -589,178 +588,194 @@ void DzFbxImporter::fbxImport()
 			{
 				dsSkin->setTargetVertexCount( numVertices );
 #else
-			// DzSkinBinding::getTargetVertexCount() is not in the 4.5 SDK, so
-			// we attempt to use the meta-object to call the method.
+		// DzSkinBinding::getTargetVertexCount() is not in the 4.5 SDK, so
+		// we attempt to use the meta-object to call the method.
 
-			int targetVertexCount = 0;
-			if ( dsSkin
-				&& QMetaObject::invokeMethod( dsSkin, "getTargetVertexCount",
-					Q_RETURN_ARG( int, targetVertexCount ) )
-				&& targetVertexCount < 1 )
-			{
-				// DzSkinBinding::setTargetVertexCount() is not in the 4.5 SDK,
-				// so we attempt to use the meta-object to call the method.
+		int targetVertexCount = 0;
+		if ( dsSkin
+			&& QMetaObject::invokeMethod( dsSkin, "getTargetVertexCount",
+				Q_RETURN_ARG( int, targetVertexCount ) )
+			&& targetVertexCount < 1 )
+		{
+			// DzSkinBinding::setTargetVertexCount() is not in the 4.5 SDK,
+			// so we attempt to use the meta-object to call the method.
 
-				bool im = QMetaObject::invokeMethod( dsSkin, "setTargetVertexCount",
-					Q_ARG( int, numVertices ) );
-				assert( im );
+			bool im = QMetaObject::invokeMethod( dsSkin, "setTargetVertexCount",
+				Q_ARG( int, numVertices ) );
+			assert( im );
 #endif
-			}
-			else if ( !dsSkin )
+		}
+		else if ( !dsSkin )
+		{
+			assert( !"Binding was not found" );
+			continue;
+		}
+
+		const int numClusters = fbxSkin->GetClusterCount();
+
+		DzSkeleton* dsBaseSkeleton = NULL;
+
+		for ( int j = 0; j < numClusters; j++ )
+		{
+			FbxCluster* fbxCluster = fbxSkin->GetCluster( j );
+			DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap.value( fbxCluster->GetLink() ) );
+			if ( !dsBone )
 			{
-				assert( !"Binding was not found" );
 				continue;
 			}
 
-			const int numClusters = fbxSkin->GetClusterCount();
-
-			DzSkeleton* dsBaseSkeleton = NULL;
-
-			for ( int j = 0; j < numClusters; j++ )
+			if ( !isChildNode( dsBone, dsFigure ) )
 			{
-				FbxCluster* fbxCluster = fbxSkin->GetCluster( j );
-				DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap.value( fbxCluster->GetLink() ) );
-				if ( !dsBone )
-				{
-					continue;
-				}
-
-				if ( !isChildNode( dsBone, dsFigure ) )
-				{
-					dsBaseSkeleton = dsBone->getSkeleton();
-				}
-			}
-
-			if ( dsBaseSkeleton )
-			{
-				replicateSkeleton( dsBaseSkeleton, skinning );
-			}
-
-
-			DzWeightMapList maps;
-			QVector<MapConversion> mapConversions;
-			for ( int j = 0; j < numClusters; j++ )
-			{
-				FbxCluster* fbxCluster = fbxSkin->GetCluster( j );
-				DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap.value( fbxCluster->GetLink() ) );
-				if ( !dsBone )
-				{
-					continue;
-				}
-
-				DzBoneBinding* dsBinding = new DzBoneBinding();
-				dsBinding->setBone( dsBone );
-				dsSkin->addBoneBinding( dsBinding );
-
-				DzWeightMap* dsWeightMap  = new DzWeightMap( numVertices );
-				int* fbxIndices = fbxCluster->GetControlPointIndices();
-				double* fbxWeights = fbxCluster->GetControlPointWeights();
-
-				MapConversion mapConv;
-				mapConv.dsWeights = dsWeightMap->getWeights();
-				mapConv.fbxWeights.resize( numVertices );
-				for ( int k = 0; k < fbxCluster->GetControlPointIndicesCount(); k++ )
-				{
-					mapConv.fbxWeights[fbxIndices[k]] = fbxWeights[k];
-				}
-				mapConversions.append( mapConv );
-
-				dsBinding->setWeights( dsWeightMap );
-				FbxAMatrix fbxMatrix;
-				fbxCluster->GetTransformLinkMatrix( fbxMatrix );
-
-				DzMatrix3 dsMatrix;
-				dsMatrix[0][0] =  fbxMatrix[0][0];
-				dsMatrix[0][1] =  fbxMatrix[0][1];
-				dsMatrix[0][2] =  fbxMatrix[0][2];
-				dsMatrix[1][0] =  fbxMatrix[1][0];
-				dsMatrix[1][1] =  fbxMatrix[1][1];
-				dsMatrix[1][2] =  fbxMatrix[1][2];
-				dsMatrix[2][0] =  fbxMatrix[2][0];
-				dsMatrix[2][1] =  fbxMatrix[2][1];
-				dsMatrix[2][2] =  fbxMatrix[2][2];
-				dsMatrix[3][0] = -fbxMatrix[3][0];
-				dsMatrix[3][1] = -fbxMatrix[3][1];
-				dsMatrix[3][2] = -fbxMatrix[3][2];
-
-				DzVec3 skelOrigin = dsFigure->getOrigin();
-				DzVec3 origin = dsBone->getOrigin();
-				dsMatrix[3][0] += ( origin[0] - skelOrigin[0] );
-				dsMatrix[3][1] += ( origin[1] - skelOrigin[1] );
-				dsMatrix[3][2] += ( origin[2] - skelOrigin[2] );
-				dsBinding->setBindingMatrix( dsMatrix );
-				maps.append( dsWeightMap );
-			}
-
-			for ( int v = 0; v < numVertices; v++ )
-			{
-				double sum = 0.0;
-				for ( int m = 0; m < mapConversions.count(); m++ )
-				{
-					sum += mapConversions[m].fbxWeights[v];
-				}
-
-				for ( int m = 0; m < mapConversions.count(); m++ )
-				{
-					mapConversions[m].dsWeights[v] = static_cast<unsigned short>( mapConversions[m].fbxWeights[v] / sum * DZ_USHORT_MAX );
-				}
-			}
-
-			DzWeightMap::normalizeMaps( maps );
-
-#if DZ_SDK_4_12_OR_GREATER
-			dsSkin->setBindingMode( DzSkinBinding::General );
-			dsSkin->setScaleMode( DzSkinBinding::BindingMaps );
-
-			dsSkin->setGeneralMapMode(
-				fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ?
-					DzSkinBinding::DualQuat :
-					DzSkinBinding::Linear
-			);
-
-#else
-			// DzSkinBinding::setBindingMode(), DzSkinBinding::setScaleMode(),
-			// and DzSkinBinding::setGeneralMapMode() are not in the 4.5 SDK,
-			// so we attempt to use the meta-object to call these methods.
-
-			bool im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
-				Q_ARG( int, 0 ) );
-			assert( im );
-
-			im = QMetaObject::invokeMethod( dsSkin, "setScaleMode",
-				Q_ARG( int, 1 ) );
-			assert( im );
-
-			im = QMetaObject::invokeMethod( dsSkin, "setGeneralMapMode",
-				Q_ARG( int, fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ? 1 : 0 ) );
-			assert( im );
-#endif
-
-			if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && skinning.m_blendWeights )
-			{
-#if DZ_SDK_4_12_OR_GREATER
-				dsSkin->setBindingMode( DzSkinBinding::Blended );
-				dsSkin->setBlendMap( skinning.m_blendWeights );
-				dsSkin->setBlendMode( DzSkinBinding::BlendLinearDualQuat );
-#else
-				// DzSkinBinding::setBindingMode(), DzSkinBinding::setBlendMap(),
-				// and DzSkinBinding::setBlendMode() are not in the 4.5 SDK,
-				// so we attempt to use the meta-object to call these methods.
-
-				im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
-					Q_ARG( int, 2 ) );
-				assert( im );
-
-				im = QMetaObject::invokeMethod( dsSkin, "setBlendMap",
-					Q_ARG( DzWeightMap*, skinning.m_blendWeights.operator->() ) );
-				assert( im );
-
-				im = QMetaObject::invokeMethod( dsSkin, "setBlendMode",
-					Q_ARG( int, 1 ) );
-				assert( im );
-#endif
+				dsBaseSkeleton = dsBone->getSkeleton();
 			}
 		}
+
+		if ( dsBaseSkeleton )
+		{
+			replicateSkeleton( dsBaseSkeleton, skinning );
+		}
+
+
+		DzWeightMapList maps;
+		QVector<MapConversion> mapConversions;
+		for ( int j = 0; j < numClusters; j++ )
+		{
+			FbxCluster* fbxCluster = fbxSkin->GetCluster( j );
+			DzBone* dsBone = qobject_cast<DzBone*>( m_nodeMap.value( fbxCluster->GetLink() ) );
+			if ( !dsBone )
+			{
+				continue;
+			}
+
+			DzBoneBinding* dsBinding = new DzBoneBinding();
+			dsBinding->setBone( dsBone );
+			dsSkin->addBoneBinding( dsBinding );
+
+			DzWeightMap* dsWeightMap  = new DzWeightMap( numVertices );
+			int* fbxIndices = fbxCluster->GetControlPointIndices();
+			double* fbxWeights = fbxCluster->GetControlPointWeights();
+
+			MapConversion mapConv;
+			mapConv.dsWeights = dsWeightMap->getWeights();
+			mapConv.fbxWeights.resize( numVertices );
+			for ( int k = 0; k < fbxCluster->GetControlPointIndicesCount(); k++ )
+			{
+				mapConv.fbxWeights[fbxIndices[k]] = fbxWeights[k];
+			}
+			mapConversions.append( mapConv );
+
+			dsBinding->setWeights( dsWeightMap );
+			FbxAMatrix fbxMatrix;
+			fbxCluster->GetTransformLinkMatrix( fbxMatrix );
+
+			DzMatrix3 dsMatrix;
+			dsMatrix[0][0] =  fbxMatrix[0][0];
+			dsMatrix[0][1] =  fbxMatrix[0][1];
+			dsMatrix[0][2] =  fbxMatrix[0][2];
+			dsMatrix[1][0] =  fbxMatrix[1][0];
+			dsMatrix[1][1] =  fbxMatrix[1][1];
+			dsMatrix[1][2] =  fbxMatrix[1][2];
+			dsMatrix[2][0] =  fbxMatrix[2][0];
+			dsMatrix[2][1] =  fbxMatrix[2][1];
+			dsMatrix[2][2] =  fbxMatrix[2][2];
+			dsMatrix[3][0] = -fbxMatrix[3][0];
+			dsMatrix[3][1] = -fbxMatrix[3][1];
+			dsMatrix[3][2] = -fbxMatrix[3][2];
+
+			DzVec3 skelOrigin = dsFigure->getOrigin();
+			DzVec3 origin = dsBone->getOrigin();
+			dsMatrix[3][0] += ( origin[0] - skelOrigin[0] );
+			dsMatrix[3][1] += ( origin[1] - skelOrigin[1] );
+			dsMatrix[3][2] += ( origin[2] - skelOrigin[2] );
+			dsBinding->setBindingMatrix( dsMatrix );
+			maps.append( dsWeightMap );
+		}
+
+		for ( int v = 0; v < numVertices; v++ )
+		{
+			double sum = 0.0;
+			for ( int m = 0; m < mapConversions.count(); m++ )
+			{
+				sum += mapConversions[m].fbxWeights[v];
+			}
+
+			for ( int m = 0; m < mapConversions.count(); m++ )
+			{
+				mapConversions[m].dsWeights[v] = static_cast<unsigned short>( mapConversions[m].fbxWeights[v] / sum * DZ_USHORT_MAX );
+			}
+		}
+
+		DzWeightMap::normalizeMaps( maps );
+
+#if DZ_SDK_4_12_OR_GREATER
+		dsSkin->setBindingMode( DzSkinBinding::General );
+		dsSkin->setScaleMode( DzSkinBinding::BindingMaps );
+
+		dsSkin->setGeneralMapMode(
+			fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ?
+				DzSkinBinding::DualQuat :
+				DzSkinBinding::Linear
+		);
+
+#else
+		// DzSkinBinding::setBindingMode(), DzSkinBinding::setScaleMode(),
+		// and DzSkinBinding::setGeneralMapMode() are not in the 4.5 SDK,
+		// so we attempt to use the meta-object to call these methods.
+
+		bool im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
+			Q_ARG( int, 0 ) );
+		assert( im );
+
+		im = QMetaObject::invokeMethod( dsSkin, "setScaleMode",
+			Q_ARG( int, 1 ) );
+		assert( im );
+
+		im = QMetaObject::invokeMethod( dsSkin, "setGeneralMapMode",
+			Q_ARG( int, fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ? 1 : 0 ) );
+		assert( im );
+#endif
+
+		if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && skinning.m_blendWeights )
+		{
+#if DZ_SDK_4_12_OR_GREATER
+			dsSkin->setBindingMode( DzSkinBinding::Blended );
+			dsSkin->setBlendMap( skinning.m_blendWeights );
+			dsSkin->setBlendMode( DzSkinBinding::BlendLinearDualQuat );
+#else
+			// DzSkinBinding::setBindingMode(), DzSkinBinding::setBlendMap(),
+			// and DzSkinBinding::setBlendMode() are not in the 4.5 SDK,
+			// so we attempt to use the meta-object to call these methods.
+
+			im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
+				Q_ARG( int, 2 ) );
+			assert( im );
+
+			im = QMetaObject::invokeMethod( dsSkin, "setBlendMap",
+				Q_ARG( DzWeightMap*, skinning.m_blendWeights.operator->() ) );
+			assert( im );
+
+			im = QMetaObject::invokeMethod( dsSkin, "setBlendMode",
+				Q_ARG( int, 1 ) );
+			assert( im );
+#endif
+		}
+	}
+}
+
+/**
+**/
+void DzFbxImporter::fbxImport()
+{
+	fbxPickAnimation();
+
+	//if ( false )
+	{
+		m_root = new Node();
+		m_root->fbxNode = m_fbxScene->GetRootNode();
+
+		fbxImportGraph( m_root );
+
+		fbxImportSkinning();
 
 		fbxImportAnimation( m_root );
 
