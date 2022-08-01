@@ -2706,19 +2706,13 @@ void DzFbxImporter::fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsM
 
 /**
 **/
-void DzFbxImporter::fbxImportSkinBinding( FbxDeformer* fbxDeformer, Node* node, DzFigure* dsFigure, int numVertices )
+void DzFbxImporter::fbxImportSkinningBlendWeights( int numVertices, Skinning &skinning )
 {
-	Skinning skinning;
-	skinning.node = node;
-	skinning.fbxSkin = static_cast< FbxSkin* >( fbxDeformer );
-	skinning.dsFigure = dsFigure;
-	skinning.numVertices = numVertices;
-
 	if ( skinning.fbxSkin
 		&& skinning.fbxSkin->GetSkinningType() == FbxSkin::eBlend )
 	{
 		const int numBlendIndices = skinning.fbxSkin->GetControlPointIndicesCount();
-		int* blendIndices = skinning.fbxSkin->GetControlPointIndices();
+		const int* blendIndices = skinning.fbxSkin->GetControlPointIndices();
 		if ( numBlendIndices > 0 && blendIndices )
 		{
 			skinning.m_blendWeights = new DzWeightMap( numVertices, "Blend Weights" );
@@ -2736,8 +2730,6 @@ void DzFbxImporter::fbxImportSkinBinding( FbxDeformer* fbxDeformer, Node* node, 
 			}
 		}
 	}
-
-	m_skins.push_back( skinning );
 }
 
 /**
@@ -2839,7 +2831,15 @@ void DzFbxImporter::fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObje
 		// skin binding
 		if ( dsFigure && fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
 		{
-			fbxImportSkinBinding( fbxDeformer, node, dsFigure, numVertices );
+			Skinning skinning;
+			skinning.node = node;
+			skinning.fbxSkin = static_cast<FbxSkin*>( fbxDeformer );
+			skinning.dsFigure = dsFigure;
+			skinning.numVertices = numVertices;
+
+			fbxImportSkinningBlendWeights( numVertices, skinning );
+
+			m_skins.push_back( skinning );
 		}
 		// morphs
 		else if ( fbxDeformer->GetClassId().Is( FbxBlendShape::ClassId ) )
