@@ -200,7 +200,7 @@ private:
 	void		applyFbxCurve( FbxAnimCurve* fbxCurve, DzFloatProperty* dsProperty, double scale = 1 );
 
 	void		fbxImportGraph( Node* node );
-	void		fbxImportAnim( Node* node );
+	void		fbxImportAnimation( Node* node );
 
 	void		updateSelectionMap( Node* node );
 

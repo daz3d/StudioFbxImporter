@@ -762,7 +762,7 @@ void DzFbxImporter::fbxImport()
 			}
 		}
 
-		fbxImportAnim( m_root );
+		fbxImportAnimation( m_root );
 
 		dzScene->setAnimRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
 		dzScene->setPlayRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
@@ -1776,7 +1776,7 @@ void DzFbxImporter::fbxImportGraph( Node* node )
 
 /**
 **/
-void DzFbxImporter::fbxImportAnim( Node* node )
+void DzFbxImporter::fbxImportAnimation( Node* node )
 {
 	if ( node->dsNode )
 	{
@@ -1854,7 +1854,7 @@ void DzFbxImporter::fbxImportAnim( Node* node )
 
 	for ( int i = 0; i < node->children.count(); i++ )
 	{
-		fbxImportAnim( node->children[i] );
+		fbxImportAnimation( node->children[i] );
 	}
 }
 
