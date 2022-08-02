@@ -2738,7 +2738,9 @@ void DzFbxImporter::fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsM
 **/
 DzWeightMapPtr DzFbxImporter::fbxImportSkinningBlendWeights( int numVertices, const FbxSkin* fbxSkin )
 {
-	if ( !fbxSkin || fbxSkin->GetSkinningType() != FbxSkin::eBlend )
+	if ( numVertices < 1
+		|| !fbxSkin
+		|| fbxSkin->GetSkinningType() != FbxSkin::eBlend )
 	{
 		return NULL;
 	}
@@ -2773,11 +2775,16 @@ DzWeightMapPtr DzFbxImporter::fbxImportSkinningBlendWeights( int numVertices, co
 
 /**
 **/
-void DzFbxImporter::fbxImportMorph( FbxDeformer* fbxDeformer, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices )
+void DzFbxImporter::fbxImportMorph( FbxBlendShape* fbxBlendShape, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices )
 {
-	DzPnt3* values = new DzPnt3[numVertices];
+	if ( !fbxBlendShape
+		|| !dsObject
+		|| numVertices < 1 )
+	{
+		return;
+	}
 
-	FbxBlendShape* fbxBlendShape = static_cast< FbxBlendShape* >( fbxDeformer );
+	DzPnt3* values = new DzPnt3[numVertices];
 
 	const int numBlendShapeChannels = fbxBlendShape->GetBlendShapeChannelCount();
 
@@ -2868,20 +2875,25 @@ void DzFbxImporter::fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObje
 		FbxDeformer* fbxDeformer = fbxMesh->GetDeformer( deformerIdx );
 
 		// skin binding
-		if ( dsFigure && fbxDeformer->GetClassId().Is( FbxSkin::ClassId ) )
+		if ( FbxSkin* fbxSkin = FbxCast<FbxSkin>( fbxDeformer ) )
 		{
+			if ( !dsFigure )
+			{
+				continue;
+			}
+
 			Skinning skinning;
 			skinning.node = node;
-			skinning.fbxSkin = FbxCast<FbxSkin>( fbxDeformer );
+			skinning.fbxSkin = fbxSkin;
 			skinning.dsFigure = dsFigure;
 			skinning.numVertices = numVertices;
-			skinning.blendWeights = fbxImportSkinningBlendWeights( numVertices, skinning.fbxSkin );
+			skinning.blendWeights = fbxImportSkinningBlendWeights( numVertices, fbxSkin );
 			m_skins.push_back( skinning );
 		}
 		// morphs
-		else if ( fbxDeformer->GetClassId().Is( FbxBlendShape::ClassId ) )
+		else if ( FbxBlendShape* fbxBlendShape = FbxCast<FbxBlendShape>( fbxDeformer ) )
 		{
-			fbxImportMorph( fbxDeformer, dsObject, numVertices, fbxVertices );
+			fbxImportMorph( fbxBlendShape, dsObject, numVertices, fbxVertices );
 		}
 	}
 }

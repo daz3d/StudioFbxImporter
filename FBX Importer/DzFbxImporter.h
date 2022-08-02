@@ -192,7 +192,7 @@ private:
 	void		fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool matsAllSame, QMap<QPair<int, int>, int> &edgeMap );
 	void		fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, QMap<QPair<int, int>, int> edgeMap, bool &enableSubd );
 	DzWeightMapPtr	fbxImportSkinningBlendWeights( int numVertices, const FbxSkin* fbxSkin );
-	void		fbxImportMorph( FbxDeformer* fbxDeformer, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices );
+	void		fbxImportMorph( FbxBlendShape* fbxBlendShape, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices );
 	void		fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObject* dsObject, DzFigure* dsFigure, int numVertices, FbxVector4* fbxVertices );
 	void		fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode );
 	void		setSubdEnabled( bool onOff, DzFacetMesh* dsMesh, DzFacetShape* dsShape );
