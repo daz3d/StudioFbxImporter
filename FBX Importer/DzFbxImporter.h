@@ -174,7 +174,7 @@ private:
 		FbxSkin*	fbxSkin;
 		DzFigure*	dsFigure;
 		int			numVertices;
-		DzWeightMapPtr	m_blendWeights;
+		DzWeightMapPtr	blendWeights;
 	};
 
 
@@ -191,7 +191,7 @@ private:
 	void		fbxImportPolygonSets( DzNode* dsMeshNode, DzFacetMesh* dsMesh, DzFacetShape* dsShape );
 	void		fbxImportFaces( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, bool matsAllSame, QMap<QPair<int, int>, int> &edgeMap );
 	void		fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsMesh, QMap<QPair<int, int>, int> edgeMap, bool &enableSubd );
-	void		fbxImportSkinningBlendWeights( int numVertices, Skinning &skinning );
+	DzWeightMapPtr	fbxImportSkinningBlendWeights( int numVertices, const FbxSkin* fbxSkin );
 	void		fbxImportMorph( FbxDeformer* fbxDeformer, DzObject* dsObject, int numVertices, FbxVector4* fbxVertices );
 	void		fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObject* dsObject, DzFigure* dsFigure, int numVertices, FbxVector4* fbxVertices );
 	void		fbxImportMesh( Node* node, FbxNode* fbxNode, DzNode* dsMeshNode );

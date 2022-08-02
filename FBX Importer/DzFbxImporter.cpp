@@ -707,51 +707,77 @@ void DzFbxImporter::fbxImportSkinning()
 
 		DzWeightMap::normalizeMaps( maps );
 
+		FbxSkin::EType fbxSkinningType = fbxSkin->GetSkinningType();
+
 #if DZ_SDK_4_12_OR_GREATER
-		dsSkin->setBindingMode( DzSkinBinding::General );
+		DzSkinBinding::BindingMode bindingMode = DzSkinBinding::General;
+		DzSkinBinding::GeneralMapMode generalMapMode = DzSkinBinding::Linear;
+		switch ( fbxSkinningType )
+		{
+		default:
+			break;
+		case FbxSkin::eDualQuaternion:
+			generalMapMode = DzSkinBinding::DualQuat;
+			break;
+		case FbxSkin::eBlend:
+			bindingMode = DzSkinBinding::Blended;
+			generalMapMode = DzSkinBinding::DualQuat;
+			break;
+		}
+
+		dsSkin->setBindingMode( bindingMode );
+		dsSkin->setGeneralMapMode( generalMapMode );
 		dsSkin->setScaleMode( DzSkinBinding::BindingMaps );
 
-		dsSkin->setGeneralMapMode(
-			fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ?
-				DzSkinBinding::DualQuat :
-				DzSkinBinding::Linear
-		);
-
 #else
+		// DzSkinBinding::BindingMode, and DzSkinBinding::GeneralMapMode are not
+		// in the 4.5 SDK, so we use the int equivalents.
+
+		int bindingMode = 0;
+		int generalMapMode = 0;
+		switch ( fbxSkinningType )
+		{
+		default:
+			break;
+		case FbxSkin::eDualQuaternion:
+			generalMapMode = 1;
+			break;
+		case FbxSkin::eBlend:
+			bindingMode = 2;
+			generalMapMode = 1;
+			break;
+		}
+
 		// DzSkinBinding::setBindingMode(), DzSkinBinding::setScaleMode(),
 		// and DzSkinBinding::setGeneralMapMode() are not in the 4.5 SDK,
 		// so we attempt to use the meta-object to call these methods.
 
 		bool im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
-			Q_ARG( int, 0 ) );
+			Q_ARG( int, bindingMode ) );
+		assert( im );
+
+		im = QMetaObject::invokeMethod( dsSkin, "setGeneralMapMode",
+			Q_ARG( int, generalMapMode ) );
 		assert( im );
 
 		im = QMetaObject::invokeMethod( dsSkin, "setScaleMode",
 			Q_ARG( int, 1 ) );
 		assert( im );
-
-		im = QMetaObject::invokeMethod( dsSkin, "setGeneralMapMode",
-			Q_ARG( int, fbxSkin->GetSkinningType() == FbxSkin::eDualQuaternion ? 1 : 0 ) );
-		assert( im );
 #endif
 
-		if ( fbxSkin->GetSkinningType() == FbxSkin::eBlend && skinning.m_blendWeights )
+		if ( fbxSkinningType == FbxSkin::eBlend
+			&& skinning.blendWeights )
 		{
 #if DZ_SDK_4_12_OR_GREATER
-			dsSkin->setBindingMode( DzSkinBinding::Blended );
-			dsSkin->setBlendMap( skinning.m_blendWeights );
+			dsSkin->setBlendMap( skinning.blendWeights );
 			dsSkin->setBlendMode( DzSkinBinding::BlendLinearDualQuat );
 #else
-			// DzSkinBinding::setBindingMode(), DzSkinBinding::setBlendMap(),
-			// and DzSkinBinding::setBlendMode() are not in the 4.5 SDK,
-			// so we attempt to use the meta-object to call these methods.
-
-			im = QMetaObject::invokeMethod( dsSkin, "setBindingMode",
-				Q_ARG( int, 2 ) );
-			assert( im );
+			// DzSkinBinding::setBlendMap() and DzSkinBinding::setBlendMode()
+			// are not in the 4.5 SDK, so we attempt to use the meta-object to
+			// call these methods.
 
 			im = QMetaObject::invokeMethod( dsSkin, "setBlendMap",
-				Q_ARG( DzWeightMap*, skinning.m_blendWeights.operator->() ) );
+				Q_ARG( DzWeightMap*, skinning.blendWeights.operator->() ) );
 			assert( im );
 
 			im = QMetaObject::invokeMethod( dsSkin, "setBlendMode",
@@ -1433,7 +1459,7 @@ void DzFbxImporter::fbxPreImportGraph( FbxNode* fbxNode )
 			{
 				// skinning weights must be linked to a bone
 
-				FbxSkin* fbxSkin = static_cast<FbxSkin*>( fbxMesh->GetDeformer( i ) );
+				FbxSkin* fbxSkin = FbxCast<FbxSkin>( fbxMesh->GetDeformer( i ) );
 				for ( int j = 0, m = fbxSkin->GetClusterCount(); j < m; j++ )
 				{
 					FbxNode* fbxClusterNode = fbxSkin->GetCluster( j )->GetLink();
@@ -2710,30 +2736,39 @@ void DzFbxImporter::fbxImportSubdEdgeWeights( FbxMesh* fbxMesh, DzFacetMesh* dsM
 
 /**
 **/
-void DzFbxImporter::fbxImportSkinningBlendWeights( int numVertices, Skinning &skinning )
+DzWeightMapPtr DzFbxImporter::fbxImportSkinningBlendWeights( int numVertices, const FbxSkin* fbxSkin )
 {
-	if ( skinning.fbxSkin
-		&& skinning.fbxSkin->GetSkinningType() == FbxSkin::eBlend )
+	if ( !fbxSkin || fbxSkin->GetSkinningType() != FbxSkin::eBlend )
 	{
-		const int numBlendIndices = skinning.fbxSkin->GetControlPointIndicesCount();
-		const int* blendIndices = skinning.fbxSkin->GetControlPointIndices();
-		if ( numBlendIndices > 0 && blendIndices )
-		{
-			skinning.m_blendWeights = new DzWeightMap( numVertices, "Blend Weights" );
-			unsigned short* dsWeightValues = skinning.m_blendWeights->getWeights();
-			for ( int bwIdx = 0; bwIdx < numBlendIndices; ++bwIdx )
-			{
-				const int idx = blendIndices[bwIdx];
-				if ( idx > numVertices )
-				{
-					continue;
-				}
-
-				const double blendWeight = skinning.fbxSkin->GetControlPointBlendWeights()[bwIdx];
-				dsWeightValues[idx] = DZ_USHORT_MAX * blendWeight;
-			}
-		}
+		return NULL;
 	}
+
+	const int numBlendIndices = fbxSkin->GetControlPointIndicesCount();
+	const int* fbxBlendIndices = fbxSkin->GetControlPointIndices();
+	if ( numBlendIndices <= 0 || !fbxBlendIndices )
+	{
+		return NULL;
+	}
+
+	DzWeightMapPtr dsBlendWeights = new DzWeightMap( numVertices, "Blend Weights" );
+	unsigned short* dsWeightValues = dsBlendWeights->getWeights();
+	for ( int bwIdx = 0; bwIdx < numBlendIndices; ++bwIdx )
+	{
+		const int idx = fbxBlendIndices[bwIdx];
+		if ( idx > numVertices )
+		{
+			continue;
+		}
+
+		const double fbxBlendWeight = fbxSkin->GetControlPointBlendWeights()[bwIdx];
+		dsWeightValues[idx] = DZ_USHORT_MAX * fbxBlendWeight;
+	}
+
+#if DZ_SDK_4_12_OR_GREATER
+	dsBlendWeights->reduceWeightMemory();
+#endif
+
+	return dsBlendWeights;
 }
 
 /**
@@ -2837,12 +2872,10 @@ void DzFbxImporter::fbxImportMeshModifiers( Node* node, FbxMesh* fbxMesh, DzObje
 		{
 			Skinning skinning;
 			skinning.node = node;
-			skinning.fbxSkin = static_cast<FbxSkin*>( fbxDeformer );
+			skinning.fbxSkin = FbxCast<FbxSkin>( fbxDeformer );
 			skinning.dsFigure = dsFigure;
 			skinning.numVertices = numVertices;
-
-			fbxImportSkinningBlendWeights( numVertices, skinning );
-
+			skinning.blendWeights = fbxImportSkinningBlendWeights( numVertices, skinning.fbxSkin );
 			m_skins.push_back( skinning );
 		}
 		// morphs
