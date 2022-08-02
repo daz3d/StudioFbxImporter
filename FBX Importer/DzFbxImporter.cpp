@@ -2038,11 +2038,9 @@ void DzFbxImporter::fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFa
 
 		DzDefaultMaterial* dsDefMaterial = qobject_cast<DzDefaultMaterial*>( dsMaterial );
 
-		const bool isPhong = fbxMaterial->GetClassId().Is( FbxSurfacePhong::ClassId );
-		if ( isPhong )
+		FbxSurfacePhong* fbxPhong = FbxCast<FbxSurfacePhong>( fbxMaterial );
+		if ( fbxPhong )
 		{
-			FbxSurfacePhong* fbxPhong = static_cast<FbxSurfacePhong*>( fbxMaterial );
-
 			diffuseColor = toQColor( fbxPhong->Diffuse );
 			diffuseMap = toTexture( fbxPhong->Diffuse );
 
@@ -2079,10 +2077,8 @@ void DzFbxImporter::fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFa
 				metallicity = qMin( 1.0f, innerDistance );
 			}
 		}
-		else if ( fbxMaterial->GetClassId().Is( FbxSurfaceLambert::ClassId ) )
+		else if ( FbxSurfaceLambert* fbxLambert = FbxCast<FbxSurfaceLambert>( fbxMaterial ) )
 		{
-			FbxSurfaceLambert* fbxLambert = static_cast<FbxSurfaceLambert*>( fbxMaterial );
-
 			diffuseColor = toQColor( fbxLambert->Diffuse );
 			diffuseMap = toTexture( fbxLambert->Diffuse );
 
@@ -2114,7 +2110,7 @@ void DzFbxImporter::fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFa
 
 			dsDefMaterial->setAmbientStrength( ambientFactor );
 
-			if ( isPhong )
+			if ( fbxPhong )
 			{
 				dsDefMaterial->setDiffuseStrength( diffuseFactor );
 
@@ -2130,7 +2126,7 @@ void DzFbxImporter::fbxImportMaterials( FbxNode* fbxNode, FbxMesh* fbxMesh, DzFa
 				dsDefMaterial->setReflectionMap( reflectionMap );
 			}
 		}
-		else if ( isPhong ) //DzPbrMaterial or DzUberIrayMaterial
+		else if ( fbxPhong ) //DzPbrMaterial or DzUberIrayMaterial
 		{
 			// Because DzPbrMaterial is not in the public SDK, we attempt to use
 			// the meta-object to call the methods. If this fails, we attempt to
