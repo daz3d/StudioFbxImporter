@@ -802,17 +802,17 @@ void DzFbxImporter::fbxImport()
 {
 	fbxPickAnimation();
 
-	//if ( false )
+	m_root = new Node();
+	m_root->fbxNode = m_fbxScene->GetRootNode();
+
+	fbxImportGraph( m_root );
+
+	fbxImportSkinning();
+
+	fbxImportAnimation( m_root );
+
+	if ( m_includeAnimations )
 	{
-		m_root = new Node();
-		m_root->fbxNode = m_fbxScene->GetRootNode();
-
-		fbxImportGraph( m_root );
-
-		fbxImportSkinning();
-
-		fbxImportAnimation( m_root );
-
 		dzScene->setAnimRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
 		dzScene->setPlayRange( DzTimeRange( dzScene->getAnimRange().getStart(), m_dsEndTime ) );
 	}
