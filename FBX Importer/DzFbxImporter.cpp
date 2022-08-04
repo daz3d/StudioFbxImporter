@@ -524,42 +524,50 @@ void DzFbxImporter::fbxRead( const QString &filename )
 
 /**
 **/
+void DzFbxImporter::fbxPickAnimationTake( int idx )
+{
+	m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( idx );
+	if ( m_fbxAnimStack->GetMemberCount<FbxAnimLayer>() <= 0 )
+	{
+		return;
+	}
+
+	m_fbxAnimLayer = m_fbxAnimStack->GetMember<FbxAnimLayer>( 0 );
+}
+
+/**
+**/
 void DzFbxImporter::fbxPickAnimation()
 {
-	if ( m_includeAnimations && !m_takeName.isEmpty() )
+	if ( !m_includeAnimations
+		|| m_takeName.isEmpty() )
 	{
-		const QString idxPrefix( "idx::" );
-		if ( m_takeName.startsWith( idxPrefix ) )
-		{
-			bool isNum = false;
-			const int takeIdx = m_takeName.mid( idxPrefix.length() ).toInt( &isNum );
-			if ( isNum && takeIdx > -1 && takeIdx < m_fbxScene->GetSrcObjectCount<FbxAnimStack>() )
-			{
-				m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( takeIdx );
+		return;
+	}
 
-				const int numLayers = m_fbxAnimStack->GetMemberCount<FbxAnimLayer>();
-				if ( numLayers > 0 )
-				{
-					m_fbxAnimLayer = m_fbxAnimStack->GetMember<FbxAnimLayer>( 0 );
-				}
-			}
+	const QString idxPrefix( "idx::" );
+	if ( m_takeName.startsWith( idxPrefix ) )
+	{
+		bool isNum = false;
+		const int takeIdx = m_takeName.mid( idxPrefix.length() ).toInt( &isNum );
+		if ( isNum
+			&& takeIdx > -1
+			&& takeIdx < m_fbxScene->GetSrcObjectCount<FbxAnimStack>() )
+		{
+			fbxPickAnimationTake( takeIdx );
 		}
-		else
+	}
+	else
+	{
+		for ( int i = 0, n = m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i < n; i++ )
 		{
-			for ( int i = 0; i < m_fbxScene->GetSrcObjectCount<FbxAnimStack>(); i++ )
+			const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
+			if ( QString( animStack->GetName() ) != m_takeName )
 			{
-				const FbxAnimStack* animStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
-				if ( QString( animStack->GetName() ) == m_takeName )
-				{
-					m_fbxAnimStack = m_fbxScene->GetSrcObject<FbxAnimStack>( i );
-
-					const int numLayers = m_fbxAnimStack->GetMemberCount<FbxAnimLayer>();
-					if ( numLayers > 0 )
-					{
-						m_fbxAnimLayer = m_fbxAnimStack->GetMember<FbxAnimLayer>( 0 );
-					}
-				}
+				continue;
 			}
+
+			fbxPickAnimationTake( i );
 		}
 	}
 }
