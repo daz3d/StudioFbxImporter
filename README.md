@@ -6,15 +6,19 @@
 ## Prerequisites
 * **[Daz Studio][DazStudioURL]** application
   * 4.16.1.17 Public Build or newer
+    * _Includes Qt 4.8.7 binaries_ (platform specific)
   * 4.20.0.17 General Release or newer
+    * _Includes Qt 4.8.7 binaries_ (platform specific)
 * **Daz Studio SDK**
   * [Version 4.5+][DazStudioSDKURL] or newer
-* **FBX SDK**
-  * Version 2016 or newer
+    * _Includes Qt 4.8.1 binaries_
+    * _Includes Qt 4.8 headers_
+* **[FBX SDK][FBXSDKURL]**
+  * Version [2016][FBXSDKArchiveURL] or newer
+* **[CMake][CMakeURL]**
+  * Version 3.4.0 or newer
 * Operating System
   * Windows 7 or newer
-* **CMake** for building
-  * Version 3.4.0 or newer
 
 ## Build instructions
 * Download and install the **Daz Studio** application.
@@ -22,7 +26,7 @@
 * Download and install the **Daz Studio SDK**.
   * Note the installation path, it _will_ be needed in a later step.
 * Download and install the **FBX SDK**.
-  * Note the installation path, it _will_ be needed in a later step.
+  * Note the installation path _before the version number_, it _will_ be needed in a later step.
 * **CMake** is required to generate project files. 
   * CMake can be used via the GUI tool, or the command line interface.
   * Using cmake-gui:
@@ -38,7 +42,8 @@
     * Set the ``DAZ_SDK_DIR`` variable to the **Daz Studio SDK** installation path (as noted above).
     * Set the ``FBX_SDK_INSTALL_DIR`` variable to the **FBX SDK** installation path (as noted above).
     * Set the ``FBX_SDK_VERSION`` and ``FBX_SDK_VSTUDIO_VERSION`` variables to the version of the FBX SDK and corresponding Visual Studio version respectively
-      * These variables are used to generate paths to the library files of FBX SDK.
+      * These variables are used to generate paths to the library files of the specified FBX SDK.
+      * These variables allow for easy switching between multiple installed FBX SDK versions.
     * Click _Configure_ - the remaining ``FBX_SDK_`` prefixed variables will be automatically populated based on the variables described above.
       * The values of these ``FBX_SDK_`` prefixed variables may need to be adjusted to reflect machine specific configurations if ``FBX_CUSTOM_LAYOUT`` is enabled.
     * Click _Generate_ once the configuration has successfully completed to generate the project.
@@ -68,3 +73,6 @@
 [RepositoryURL]: https://github.com/daz3d/StudioFbxImporter
 [DazStudioURL]: https://www.daz3d.com/get_studio
 [DazStudioSDKURL]: https://www.daz3d.com/daz-studio-4-5-sdk
+[FBXSDKURL]: https://www.autodesk.com/products/fbx/overview
+[FBXSDKArchiveURL]: https://www.autodesk.com/developer-network/platform-technologies/fbx-sdk-archives
+[CMakeURL]: https://cmake.org
